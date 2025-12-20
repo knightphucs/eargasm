@@ -13,11 +13,11 @@ import {
   ScrollView,
   Dimensions,
 } from "react-native";
-import { Image } from "expo-image"; // Dùng thư viện ảnh xịn
-import { LinearGradient } from "expo-linear-gradient"; // Hiệu ứng nền
-import { Ionicons } from "@expo/vector-icons"; // Icon
+import { Image } from "expo-image"; 
+import { LinearGradient } from "expo-linear-gradient"; 
+import { Ionicons } from "@expo/vector-icons"; 
 import * as ImagePicker from "expo-image-picker";
-import { useNavigation } from "@react-navigation/native"; // Để làm nút Back
+import { useNavigation } from "@react-navigation/native"; 
 
 import { useUser } from "../context/UserContext";
 import { uploadAvatarToCloudinary } from "../services/avatarService";
@@ -49,7 +49,6 @@ export default function UserProfileScreen() {
 
   if (!userProfile) return null;
 
-  // --- Logic xử lý (Giữ nguyên logic cũ của bạn) ---
   const handlePickAvatar = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
@@ -102,7 +101,6 @@ export default function UserProfileScreen() {
 
   return (
     <View style={styles.container}>
-      {/* 1. Background Layer: Ảnh nền mờ ảo */}
       <View style={styles.backgroundLayer}>
         <Image
           source={currentAvatar}
@@ -110,7 +108,6 @@ export default function UserProfileScreen() {
           contentFit="cover"
           blurRadius={50} // Làm mờ ảnh để tạo nền
         />
-        {/* Lớp phủ đen mờ để làm nổi nội dung */}
         <View style={styles.overlay} />
       </View>
 
@@ -296,7 +293,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 20,
     borderWidth: 3,
-    borderColor: "#121212", // Tạo viền trùng màu nền để cắt hình
+    borderColor: "#121212", 
   },
   unsavedContainer: {
     flexDirection: 'row',

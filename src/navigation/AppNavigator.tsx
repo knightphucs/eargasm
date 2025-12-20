@@ -9,6 +9,7 @@ import HomeScreen from "../screens/HomeScreen";
 import SearchScreen from "../screens/SearchScreen";
 import UserProfileScreen from "../screens/UserProfileScreen";
 import LibraryScreen from "../screens/LibraryScreen";
+import PlaylistDetailScreen from "../screens/PlaylistDetailScreen";
 import { MusicProvider } from "../context/MusicContext";
 import MiniPlayer from "../components/MiniPlayer";
 
@@ -69,6 +70,11 @@ export default function AppNavigator() {
             name="UserProfile"
             component={UserProfileScreen}
             options={{ title: "Profile" }}
+          />
+          <Stack.Screen
+            name="PlaylistDetail"
+            component={PlaylistDetailScreen}
+            options={{ headerShown: false,title: "Playlist" }}
           />
         </Stack.Navigator>
 
