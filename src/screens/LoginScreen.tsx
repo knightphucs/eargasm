@@ -64,6 +64,8 @@ export default function LoginScreen() {
 
       await setDoc(doc(db, "users", user.uid), {
         email: user.email,
+        displayName: user.email?.split("@")[0] ?? "New User",
+        avatarUrl: null, // để thêm sửa avatar,displayname cho user
         createdAt: new Date().toISOString(),
         spotify: {
           isConnected: false,
