@@ -107,7 +107,7 @@ export const saveToken = async (token: string, expiresIn: number) => {
     await AsyncStorage.setItem(TOKEN_KEY, token);
     await AsyncStorage.setItem(EXPIRATION_KEY, expirationTime.toString());
   } catch (e) {
-    console.error("Lỗi lưu token", e);
+    console.error("Error saving token", e);
   }
 };
 
@@ -115,12 +115,16 @@ export const getSavedToken = async () => {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     const expirationTime = await AsyncStorage.getItem(EXPIRATION_KEY);
+
     if (!token || !expirationTime) return null;
+
     const currentTime = new Date().getTime();
+
     if (currentTime > parseInt(expirationTime)) {
-      await AsyncStorage.removeItem(TOKEN_KEY);
+      await AsyncStorage.multiRemove([TOKEN_KEY, EXPIRATION_KEY]);
       return null;
     }
+
     return token;
   } catch (e) {
     return null;
@@ -133,7 +137,7 @@ export const createPlaylist = async (
   playlistName: string
 ) => {
   try {
-    console.log(`📝 Đang tạo playlist: ${playlistName} cho user: ${userId}`);
+    console.log(`📝 Creating playlist: ${playlistName} for user: ${userId}`);
 
     const response = await fetch(
       `https://api.spotify.com/v1/users/${userId}/playlists`,
@@ -145,7 +149,7 @@ export const createPlaylist = async (
         },
         body: JSON.stringify({
           name: playlistName,
-          description: "Playlist tạo từ Eargasm App (Demo)",
+          description: "Playlist created from Eargasm App (Demo)",
           public: false, // Tạo playlist riêng tư cho an toàn
         }),
       }
@@ -159,7 +163,7 @@ export const createPlaylist = async (
 
     return json;
   } catch (error) {
-    console.error("❌ Lỗi tạo Playlist:", error);
+    console.error("❌ Error creating Playlist:", error);
     throw error;
   }
 };

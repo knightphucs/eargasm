@@ -10,10 +10,18 @@ import { Audio } from "expo-av";
 interface MusicContextType {
   isPlaying: boolean;
   currentTrack: any;
-  playTrack: (track: any) => Promise<void>;
+  isExpanded: boolean;
+  playTrack: (track: any, list?: any[]) => Promise<void>;
   pauseTrack: () => Promise<void>;
   resumeTrack: () => Promise<void>;
   closePlayer: () => void;
+  expandPlayer: () => void;
+  collapsePlayer: () => void;
+  position: number;
+  duration: number;
+  seekTo: (value: number) => Promise<void>;
+  playNext: () => Promise<void>;
+  playPrevious: () => Promise<void>;
 }
 
 const MusicContext = createContext<MusicContextType | undefined>(undefined);
@@ -21,15 +29,51 @@ const MusicContext = createContext<MusicContextType | undefined>(undefined);
 export const MusicProvider = ({ children }: { children: ReactNode }) => {
   const soundRef = useRef<Audio.Sound | null>(null);
 
+  const seekTo = async (value: number) => {
+    if (!soundRef.current) return;
+    await soundRef.current.setPositionAsync(value);
+  };
+
+  const [isExpanded, setIsExpanded] = useState(false);
+  const expandPlayer = () => setIsExpanded(true);
+  const collapsePlayer = () => setIsExpanded(false);
+
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(1);
+
   const [currentTrack, setCurrentTrack] = useState<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const playTrack = async (track: any) => {
+  const [queue, setQueue] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState<number>(-1);
+
+  const playNext = async () => {
+    if (queue.length === 0) return;
+    const nextIndex = (currentIndex + 1) % queue.length;
+    setCurrentIndex(nextIndex);
+    await playTrack(queue[nextIndex]);
+  };
+
+  const playPrevious = async () => {
+    if (queue.length === 0) return;
+    const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
+    setCurrentIndex(prevIndex);
+    await playTrack(queue[prevIndex]);
+  };
+
+  const playTrack = async (track: any, list?: any[]) => {
     const previewUrl =
       track.preview_url ||
       "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
 
     try {
+      // Nếu truyền danh sách bài → set queue
+      if (list) {
+        setQueue(list);
+        const index = list.findIndex((t) => t.id === track.id);
+        setCurrentIndex(index);
+      }
+
       if (currentTrack?.id === track.id && soundRef.current) {
         if (isPlaying) {
           await soundRef.current.pauseAsync();
@@ -50,22 +94,24 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       setCurrentTrack(track);
       setIsPlaying(true);
 
-      const { sound: newSound } = await Audio.Sound.createAsync(
+      const { sound } = await Audio.Sound.createAsync(
         { uri: previewUrl },
         { shouldPlay: true }
       );
 
-      // Lưu vào Ref
-      soundRef.current = newSound;
+      soundRef.current = sound;
 
-      // Tự động reset icon khi hết nhạc
-      newSound.setOnPlaybackStatusUpdate((status: any) => {
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (!status.isLoaded) return;
+        setPosition(status.positionMillis);
+        setDuration(status.durationMillis || 1);
+
         if (status.didJustFinish) {
-          setIsPlaying(false);
+          playNext();
         }
       });
-    } catch (error) {
-      console.error("Lỗi phát nhạc:", error);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -98,10 +144,18 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       value={{
         isPlaying,
         currentTrack,
+        isExpanded,
         playTrack,
         pauseTrack,
         resumeTrack,
         closePlayer,
+        expandPlayer,
+        collapsePlayer,
+        position,
+        duration,
+        seekTo,
+        playNext,
+        playPrevious,
       }}
     >
       {children}

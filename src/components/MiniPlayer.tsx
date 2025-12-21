@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,32 +7,163 @@ import {
   StyleSheet,
   Animated,
   Dimensions,
+  PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useMusic } from "../context/MusicContext";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
+const SCREEN_WIDTH = Dimensions.get("window").width;
+const SWIPE_THRESHOLD = 80;
 
 export default function MiniPlayer() {
-  const { currentTrack, isPlaying, playTrack, closePlayer } = useMusic();
+  const {
+    currentTrack,
+    isPlaying,
+    playTrack,
+    closePlayer,
+    expandPlayer,
+    playNext,
+    playPrevious,
+    position,
+    duration,
+  } = useMusic();
 
-  const translateY = useRef(new Animated.Value(100)).current;
+  const progress = duration > 0 ? Math.min(position / duration, 1) : 0;
+
+  // Animation xuất hiện
+  const entranceAnim = useRef(new Animated.Value(150)).current;
+
+  // Animation di chuyển (Pan)
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+
+  // Animation Scale (Hiệu ứng phồng lên khi chạm)
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const isPlayerVisible = useRef(false);
+
+  // Kết hợp Scale
+  const animatedScale = Animated.multiply(
+    scaleAnim,
+    pan.y.interpolate({
+      inputRange: [-200, 0],
+      outputRange: [1.02, 1],
+      extrapolate: "clamp",
+    })
+  );
+
+  const opacity = pan.x.interpolate({
+    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
+    outputRange: [0.5, 1, 0.5],
+    extrapolate: "clamp",
+  });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10;
+      },
+
+      onPanResponderGrant: () => {
+        // Player "phồng" lên ngay lập tức
+        Animated.spring(scaleAnim, {
+          toValue: 1.05,
+          friction: 5,
+          tension: 100,
+          useNativeDriver: true,
+        }).start();
+
+        // FIX LỖI _value: Ép kiểu as any để lấy giá trị hiện tại
+        pan.setOffset({
+          x: (pan.x as any)._value,
+          y: (pan.y as any)._value,
+        });
+      },
+
+      onPanResponderMove: (_, gestureState) => {
+        if (Math.abs(gestureState.dx) > Math.abs(gestureState.dy)) {
+          pan.setValue({ x: gestureState.dx, y: 0 });
+        } else {
+          const newY =
+            gestureState.dy < 0 ? gestureState.dy : gestureState.dy * 0.3;
+          pan.setValue({ x: 0, y: newY });
+        }
+      },
+
+      onPanResponderRelease: (_, gestureState) => {
+        pan.flattenOffset();
+        const { dx, dy, vy } = gestureState;
+
+        // Vuốt ngang
+        if (Math.abs(dx) > Math.abs(dy)) {
+          if (dx < -SWIPE_THRESHOLD) {
+            playNext();
+            resetPosition();
+          } else if (dx > SWIPE_THRESHOLD) {
+            playPrevious();
+            resetPosition();
+          } else {
+            resetPosition();
+          }
+        }
+        // Vuốt dọc hoặc Tap
+        else {
+          const isTap = Math.abs(dx) < 5 && Math.abs(dy) < 5;
+          const isSwipeUp = dy < -SWIPE_THRESHOLD || (dy < -30 && vy < -0.5);
+
+          if (isTap || isSwipeUp) {
+            expandPlayer();
+            // Reset nhẹ nhàng
+            Animated.parallel([
+              Animated.spring(pan, {
+                toValue: { x: 0, y: 0 },
+                useNativeDriver: true,
+              }),
+              Animated.timing(scaleAnim, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+            ]).start();
+          } else {
+            resetPosition();
+          }
+        }
+      },
+    })
+  ).current;
+
+  const resetPosition = () => {
+    Animated.parallel([
+      Animated.spring(pan, {
+        toValue: { x: 0, y: 0 },
+        friction: 6,
+        tension: 60,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 5,
+        tension: 60,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   useEffect(() => {
     if (currentTrack) {
       if (!isPlayerVisible.current) {
-        Animated.spring(translateY, {
+        Animated.spring(entranceAnim, {
           toValue: 0,
+          friction: 7,
+          tension: 40,
           useNativeDriver: true,
-          speed: 12,
-          bounciness: 5,
         }).start();
         isPlayerVisible.current = true;
       }
     } else {
-      Animated.timing(translateY, {
+      Animated.timing(entranceAnim, {
         toValue: 150,
         duration: 300,
         useNativeDriver: true,
@@ -44,9 +175,28 @@ export default function MiniPlayer() {
   if (!currentTrack) return null;
 
   return (
-    <Animated.View style={[styles.container, { transform: [{ translateY }] }]}>
-      {/* Thanh tiến trình giả */}
-      <View style={styles.progressBar} />
+    <Animated.View
+      {...panResponder.panHandlers}
+      style={[
+        styles.container,
+        {
+          opacity: opacity,
+          transform: [
+            { translateY: entranceAnim },
+            { translateX: pan.x },
+            { translateY: pan.y },
+            { scale: animatedScale },
+          ],
+        },
+      ]}
+    >
+      <View style={styles.progressContainer}>
+        <View style={styles.progressBackground}>
+          <View
+            style={[styles.progressFill, { width: `${progress * 100}%` }]}
+          />
+        </View>
+      </View>
 
       <View style={styles.content}>
         <Image
@@ -68,12 +218,10 @@ export default function MiniPlayer() {
         </View>
 
         <View style={styles.controls}>
-          {/* Nút Previous */}
-          <TouchableOpacity style={styles.controlBtn}>
+          <TouchableOpacity onPress={playPrevious} style={styles.controlBtn}>
             <Ionicons name="play-skip-back" size={24} color="white" />
           </TouchableOpacity>
 
-          {/* Nút Play/Pause */}
           <TouchableOpacity
             onPress={() => playTrack(currentTrack)}
             style={styles.playBtn}
@@ -85,12 +233,10 @@ export default function MiniPlayer() {
             />
           </TouchableOpacity>
 
-          {/* Nút Next */}
-          <TouchableOpacity style={styles.controlBtn}>
+          <TouchableOpacity onPress={playNext} style={styles.controlBtn}>
             <Ionicons name="play-skip-forward" size={24} color="white" />
           </TouchableOpacity>
 
-          {/* Nút Close */}
           <TouchableOpacity onPress={closePlayer} style={styles.closeBtn}>
             <Ionicons name="close" size={20} color="#bbb" />
           </TouchableOpacity>
@@ -100,6 +246,7 @@ export default function MiniPlayer() {
   );
 }
 
+// FULL STYLES ĐỂ KHÔNG BỊ LỖI
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
@@ -107,32 +254,26 @@ const styles = StyleSheet.create({
     left: 10,
     right: 10,
     backgroundColor: "#202020",
-    borderRadius: 8,
+    borderRadius: 12,
     zIndex: 9999,
-    elevation: 10, // Android shadow
-    shadowColor: "#000", // iOS shadow
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
     borderWidth: 1,
-    borderColor: "#333",
-  },
-  progressBar: {
-    height: 2,
-    backgroundColor: "#1DB954",
-    width: "100%",
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderColor: "rgba(255,255,255,0.05)",
   },
   content: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 8,
+    padding: 10,
+    height: 64,
   },
   img: {
     width: 42,
     height: 42,
-    borderRadius: 4,
+    borderRadius: 6,
     backgroundColor: "#333",
   },
   info: {
@@ -144,7 +285,8 @@ const styles = StyleSheet.create({
   title: {
     color: "white",
     fontSize: 13,
-    fontWeight: "bold",
+    fontWeight: "600",
+    marginBottom: 2,
   },
   artist: {
     color: "#b3b3b3",
@@ -161,9 +303,28 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   closeBtn: {
-    marginLeft: 10,
+    marginLeft: 5,
     padding: 5,
-    borderLeftWidth: 1,
-    borderLeftColor: "#333",
+  },
+  progressContainer: {
+    width: "100%",
+    position: "absolute",
+    top: -1,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    opacity: 0.8,
+  },
+  progressBackground: {
+    height: 2,
+    width: "100%",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#1DB954",
   },
 });
