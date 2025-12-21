@@ -7,9 +7,6 @@ import AppNavigator from "./src/navigation/AppNavigator";
 import { SpotifyAuthProvider } from "./src/context/SpotifyAuthContext";
 import { UserProvider, useUser } from "./src/context/UserContext";
 
-// refactor notes : Auth state is now handled centrally in UserContext
-// - Simplify App root logic (no duplicate onAuthStateChanged)
-// - And allows sharing user profile data across screens
 function Root() {
   const { firebaseUser, loading } = useUser();
 
@@ -27,11 +24,13 @@ function Root() {
     );
   }
 
-  return (
+  return firebaseUser ? (
     <SpotifyAuthProvider>
       <AppNavigator />
     </SpotifyAuthProvider>
-  return firebaseUser ? <AppNavigator /> : <LoginScreen />;
+  ) : (
+    <LoginScreen />
+  );
 }
 
 export default function App() {

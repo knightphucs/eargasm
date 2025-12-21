@@ -1,105 +1,227 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
-  Button,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Alert,
   Dimensions,
   Animated,
   ActivityIndicator,
+  ScrollView,
+  StatusBar,
+  ViewToken,
 } from "react-native";
-import { Image } from "expo-image"; // Dùng thư viện ảnh xịn hơn
-import { LinearGradient } from "expo-linear-gradient"; // Hiệu ứng nền
-import * as WebBrowser from "expo-web-browser";
-import { useAuthRequest, ResponseType } from "expo-auth-session";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../config/firebaseConfig";
-import { signOut } from "firebase/auth";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 
+// Contexts
 import { useMusic } from "../context/MusicContext";
 import { useSpotifyAuth } from "../context/SpotifyAuthContext";
+import { useUser } from "../context/UserContext";
 import { getUserTopTracks } from "../services/spotifyService";
-import { useUser } from "../context/UserContext"; // Import Context User
-
-WebBrowser.maybeCompleteAuthSession();
 
 const { width } = Dimensions.get("window");
+const BANNER_WIDTH = width;
+const BANNER_HEIGHT = 280;
 
-// Component Skeleton: Hiệu ứng loading dạng khung xương
-const SkeletonItem = () => {
-  const opacity = React.useRef(new Animated.Value(0.3)).current;
+// --- INTERFACES ---
+interface Track {
+  id: string;
+  name: string;
+  artists: { name: string }[];
+  album: { images: { url: string }[] };
+  images?: { url: string }[];
+}
+
+interface BannerProps {
+  data: Track[];
+  onPlay: (item: Track) => void;
+}
+
+interface CircleArtistProps {
+  item: Track;
+  onPress: () => void;
+}
+
+// --- COMPONENT: AUTO SCROLLING BANNER ---
+const AutoScrollingBanner = ({ data, onPlay }: BannerProps) => {
+  const flatListRef = useRef<FlatList>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const scrollX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
+    if (!data || data.length === 0) return;
+
+    const interval = setInterval(() => {
+      let nextIndex = currentIndex + 1;
+      if (nextIndex >= data.length) {
+        nextIndex = 0;
+      }
+
+      flatListRef.current?.scrollToIndex({
+        index: nextIndex,
+        animated: true,
+      });
+      setCurrentIndex(nextIndex);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [currentIndex, data]);
+
+  // Fix lỗi Type cho viewableItems
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems.length > 0 && viewableItems[0].index !== null) {
+        setCurrentIndex(viewableItems[0].index);
+      }
+    }
+  ).current;
+
+  if (!data || data.length === 0) return null;
+
+  const renderBannerItem = ({ item }: { item: Track }) => (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={() => onPlay(item)}
+      style={{ width: BANNER_WIDTH, height: BANNER_HEIGHT }}
+    >
+      <Image
+        source={{ uri: item.album?.images?.[0]?.url || item.images?.[0]?.url }}
+        style={StyleSheet.absoluteFillObject}
+        contentFit="cover"
+      />
+      <LinearGradient
+        colors={["transparent", "rgba(0,0,0,0.4)", "rgba(0,0,0,0.95)"]}
+        style={StyleSheet.absoluteFillObject}
+      />
+
+      <View style={styles.bannerContent}>
+        <View style={styles.tagContainer}>
+          <Text style={styles.tagText}>FEATURED TRACK</Text>
+        </View>
+        <Text style={styles.bannerTitle} numberOfLines={2}>
+          {item.name}
+        </Text>
+        <Text style={styles.bannerSubtitle}>{item.artists[0].name}</Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
-    <View style={styles.trackItem}>
-      <Animated.View style={[styles.skeletonBox, { width: 60, height: 60, opacity }]} />
-      <View style={{ marginLeft: 15, flex: 1 }}>
-        <Animated.View style={[styles.skeletonBox, { width: "70%", height: 16, marginBottom: 8, opacity }]} />
-        <Animated.View style={[styles.skeletonBox, { width: "40%", height: 12, opacity }]} />
+    <View style={{ height: BANNER_HEIGHT }}>
+      <FlatList
+        ref={flatListRef}
+        data={data}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => `banner-${item.id}`}
+        renderItem={renderBannerItem}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: false }
+        )}
+      />
+      {/* Dots Indicator */}
+      <View style={styles.paginationDotContainer}>
+        {data.map((_: any, i: number) => {
+          const opacity = scrollX.interpolate({
+            inputRange: [(i - 1) * width, i * width, (i + 1) * width],
+            outputRange: [0.3, 1, 0.3],
+            extrapolate: "clamp",
+          });
+          return <Animated.View key={i} style={[styles.dot, { opacity }]} />;
+        })}
       </View>
     </View>
   );
 };
 
+// --- COMPONENT: HORIZONTAL CIRCLE LIST ---
+const CircleArtistItem = ({ item, onPress }: CircleArtistProps) => (
+  <TouchableOpacity
+    style={{ alignItems: "center", marginRight: 20 }}
+    onPress={onPress}
+  >
+    <Image
+      source={{ uri: item.album?.images?.[0]?.url }}
+      style={{
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        borderWidth: 2,
+        borderColor: "#1DB954",
+      }}
+    />
+    <Text
+      style={{
+        color: "#ccc",
+        fontSize: 11,
+        marginTop: 5,
+        width: 70,
+        textAlign: "center",
+      }}
+      numberOfLines={1}
+    >
+      {item.artists[0].name}
+    </Text>
+  </TouchableOpacity>
+);
+
+// --- MAIN SCREEN ---
 export default function HomeScreen() {
-  const [loading, setLoading] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [spotifyProfile, setSpotifyProfile] = useState<any>(null); // Đổi tên để tránh nhầm với firestoreUser
-  const [tracks, setTracks] = useState<any[]>([]);
+  const {
+    token,
+    loading: authLoading,
+    userProfile: spotifyProfile,
+    connectSpotify,
+    logoutSpotify,
+  } = useSpotifyAuth();
 
-  const navigation = useNavigation<any>();
-  const { playTrack, currentTrack, isPlaying } = useMusic();
-  
-  // Lấy dữ liệu user từ Firestore (Realtime update)
   const { userProfile: firestoreUser } = useUser();
+  const { playTrack, currentTrack, isPlaying } = useMusic();
+  const navigation = useNavigation<any>();
 
-  const { token, loading, userProfile, connectSpotify, logoutSpotify } =
-    useSpotifyAuth();
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!token || !auth.currentUser) return;
-    loadTracks();
-  }, [token]);
+  const trendingScrollX = useRef(0);
 
-  const loadTracks = async () => {
-    try {
-      const data = await getUserTopTracks(token!);
-      setTracks(data.items || []);
-  const checkLogin = async () => {
-    setLoading(true);
-    const savedToken = await getSavedToken();
-
-    if (savedToken) {
-      console.log("⚡ Auto Login with saved Token");
-      setToken(savedToken);
-      loadData(savedToken);
-    } else {
-      setLoading(false); // Dừng loading nếu chưa login
-    }
+  const getGreeting = () => {
+    const hours = new Date().getHours();
+    if (hours < 12) return "Good Morning";
+    if (hours < 18) return "Good Afternoon";
+    return "Good Evening";
   };
 
-  const loadData = async (accessToken: string) => {
+  const displayAvatar =
+    firestoreUser?.avatarUrl || spotifyProfile?.images?.[0]?.url;
+  // Fallback avatar nếu không có ảnh
+  const avatarSource = displayAvatar
+    ? { uri: displayAvatar }
+    : require("../../assets/avatar.png");
+
+  const displayName =
+    firestoreUser?.displayName || spotifyProfile?.display_name || "User";
+
+  useEffect(() => {
+    if (token) loadData();
+  }, [token]);
+
+  const loadData = async () => {
+    // Fix: Kiểm tra token trước khi gọi service để tránh lỗi null
+    if (!token) return;
+
+    setLoading(true);
     try {
-      // Chỉ load data nhạc và profile gốc từ Spotify
-      const [profileData, tracksData] = await Promise.all([
-        getUserProfile(accessToken),
-        getUserTopTracks(accessToken),
-      ]);
-      setSpotifyProfile(profileData);
-      setTracks(tracksData.items || []);
+      const data = await getUserTopTracks(token);
+      setTracks(data.items || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -107,346 +229,351 @@ export default function HomeScreen() {
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      "Đăng xuất",
-      "Bạn có chắc chắn muốn đăng xuất không?",
-      [
-        {
-          text: "Hủy",
-          style: "cancel",
-        },
-        {
-          text: "Đăng xuất",
-          style: "destructive",
-          onPress: async () => {
-            await logoutSpotify();
-          },
-  const handleExchangeToken = async (code: string) => {
-    setLoading(true);
-    try {
-      const tokenResult = await exchangeCodeForToken(code, request?.codeVerifier || "");
-      const { access_token, expires_in } = tokenResult;
+  if (!token)
+    return (
+      <View style={styles.centerContainer}>
+        <TouchableOpacity style={styles.loginBtn} onPress={connectSpotify}>
+          <Text style={styles.btnText}>Login Spotify</Text>
+        </TouchableOpacity>
+      </View>
+    );
 
-      setToken(access_token);
-      await saveToken(access_token, expires_in);
+  const bannerData = tracks.slice(0, 5);
+  const artistData = tracks.slice(5, 12);
+  const listData = tracks.slice(0, 8);
 
-      // Cập nhật trạng thái kết nối Spotify vào Firestore
-      if (auth.currentUser) {
-        setDoc(
-          doc(db, "users", auth.currentUser.uid),
-          { spotify: { isConnected: true, accessToken: access_token } },
-          { merge: true }
-        );
-      }
+  const trendingRef = useRef<FlatList>(null);
+  const isUserInteracting = useRef(false);
+  const autoScrollTimer = useRef<NodeJS.Timeout | null>(null);
 
-      loadData(access_token);
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
-      setLoading(false);
+  const CARD_WIDTH = 155; // 140 + margin
+  const loopingData = [...listData, ...listData];
+
+  const currentOffset = useRef(0);
+
+  const onTrendingScroll = (e: any) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    currentOffset.current = offsetX;
+
+    const singleListWidth = CARD_WIDTH * listData.length;
+
+    // Khi scroll sang nửa sau → nhảy về nửa đầu (vô hình)
+    if (offsetX >= singleListWidth) {
+      trendingRef.current?.scrollToOffset({
+        offset: offsetX - singleListWidth,
+        animated: false,
+      });
+      currentOffset.current = offsetX - singleListWidth;
     }
   };
 
-  const logoutSpotify = async () => {
-    Alert.alert("Log out", "Are you sure to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await AsyncStorage.clear();
-            setToken(null);
-            setSpotifyProfile(null);
-            setTracks([]);
-            await signOut(auth);
-          } catch (error) {
-            console.error("Logout error:", error);
-          }
-        },
-      ],
-      { cancelable: true }
-    );
+  const startAutoScroll = () => {
+    stopAutoScroll();
+
+    autoScrollTimer.current = setInterval(() => {
+      if (isUserInteracting.current) return;
+
+      trendingRef.current?.scrollToOffset({
+        offset: currentOffset.current + 0.4, // 👈 mượt
+        animated: false,
+      });
+    }, 16);
   };
 
-  // Logic chào hỏi theo giờ
-  const getGreeting = () => {
-    const hours = new Date().getHours();
-    if (hours < 12) return "Good morning";
-    if (hours < 18) return "Good afternoon";
-    return "Good evening";
+  const stopAutoScroll = () => {
+    if (autoScrollTimer.current) {
+      clearInterval(autoScrollTimer.current);
+      autoScrollTimer.current = null;
+    }
   };
 
-  const renderHeader = () => {
-    // Nếu đang load hoặc chưa có token thì hiện Skeleton Header (hoặc null)
-    if (!token) return null;
-
-    // Logic ưu tiên hiển thị: Firestore > Spotify > Default
-    const displayAvatar = firestoreUser?.avatarUrl 
-      ? firestoreUser.avatarUrl 
-      : spotifyProfile?.images?.[0]?.url;
-
-    const displayName = firestoreUser?.displayName || spotifyProfile?.display_name || "User";
-
-    return (
-      <View style={styles.headerContainer}>
-        {/* Hiệu ứng Gradient mờ phía trên */}
-        <LinearGradient
-          colors={['rgba(29, 185, 84, 0.3)', 'transparent']}
-          style={styles.gradientBackground}
-        />
-
-        <View style={styles.headerContent}>
-          <TouchableOpacity 
-            style={styles.profileSection}
-            onPress={() => navigation.navigate("UserProfile")}
-          >
-            <Image
-              source={displayAvatar ? { uri: displayAvatar } : require("../../assets/avatar.png")}
-              style={styles.avatar}
-              transition={500} // Fade-in effect
-              contentFit="cover"
-            />
-            <View>
-              <Text style={styles.greetingText}>{getGreeting()}</Text>
-              <Text style={styles.userNameText}>{displayName}</Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={logoutSpotify}>
-            <Ionicons name="log-out-outline" size={24} color="#b3b3b3" />
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-          <Text style={styles.logoutText}>Log Out</Text>
-        <Text style={styles.sectionTitle}>Your Top Mixes</Text>
-      </View>
-    );
+  const onTouchStart = () => {
+    isUserInteracting.current = true;
+    stopAutoScroll();
   };
 
-  // Màn hình Login (Chưa có token)
-  if (!token) {
-    return (
-      <View style={styles.centerContainer}>
-        <Ionicons name="musical-notes" size={80} color="#1DB954" style={{ marginBottom: 20 }} />
-        <Text style={styles.loginTitle}>Eargasm</Text>
-        <Text style={styles.loginSub}>Millions of songs. Free on Eargasm.</Text>
-        <TouchableOpacity
-          disabled={!request}
-          style={styles.loginButton}
-          onPress={() => promptAsync()}
-        >
-          <Text style={styles.loginButtonText}>Connect with Spotify</Text>
-        </TouchableOpacity>
-        {loading && <ActivityIndicator style={{ marginTop: 20 }} color="#1DB954" />}
-      </View>
-    );
-  }
+  const onTouchEnd = () => {
+    isUserInteracting.current = false;
+    setTimeout(startAutoScroll, 2000); // ⏱ resume sau 2s
+  };
+
+  useEffect(() => {
+    if (listData.length > 0) {
+      startAutoScroll();
+    }
+
+    return () => stopAutoScroll();
+  }, [listData]);
 
   return (
     <View style={styles.container}>
-      {loading ? (
-        <ActivityIndicator size="large" color="#1DB954" />
-      ) : (
-        <>
-          {!token && (
-            <View style={styles.center}>
-              <Button title="Connect Spotify" onPress={connectSpotify} />
-            </View>
-          )}
-          {token && (
-            <FlatList
-              data={tracks}
-              keyExtractor={(item) => item.id}
-              ListHeaderComponent={renderHeader}
-              contentContainerStyle={{
-                padding: 20,
-                paddingTop: 50,
-                paddingBottom: 150,
-              }}
-              renderItem={({ item }) => {
-                const isTrackPlaying =
-                  currentTrack?.id === item.id && isPlaying;
+      {/* Fix: StatusBar props correct */}
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
+      />
 
-                return (
-                  <TouchableOpacity
-                    style={[
-                      styles.trackItem,
-                      isTrackPlaying && { backgroundColor: "#282828" },
-                    ]}
-                    onPress={() => playTrack(item, tracks)}
-                  >
-                    {/* Album Art */}
-                    <Image
-                      source={{
-                        uri:
-                          item.album?.images?.[0]?.url || item.images?.[0]?.url,
-                      }}
-                      style={styles.albumArt}
-                    />
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 120, paddingTop: 0 }} // Remove top padding because banner is translucent
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 1. AUTO SCROLLING HEADER */}
+        {loading ? (
+          <View style={{ height: 280, justifyContent: "center" }}>
+            <ActivityIndicator color="#1DB954" />
+          </View>
+        ) : (
+          <AutoScrollingBanner
+            data={bannerData}
+            onPlay={(item) => playTrack(item, tracks)}
+          />
+        )}
 
-                    {/* Track Info */}
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[
-                          styles.trackName,
-                          isTrackPlaying && { color: "#1DB954" },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.name}
-                      </Text>
-                      <Text style={styles.artistName}>
-                        {item.artists.map((a: any) => a.name).join(", ")}
-                      </Text>
-                    </View>
+        {/* Header Greeting */}
+        <View style={styles.greetingContainer}>
+          <Text style={styles.greetingTitle}>Discover</Text>
+          <View>
+            <Text style={styles.greetingText}>{getGreeting()},</Text>
+            <Text style={styles.userNameText} numberOfLines={1}>
+              {displayName}
+            </Text>
+          </View>
 
-                    {/* Play/Pause Icon */}
-                    <Ionicons
-                      name={isTrackPlaying ? "pause-circle" : "play-circle"}
-                      size={32}
-                      color={isTrackPlaying ? "#1DB954" : "white"}
-                    />
-                  </TouchableOpacity>
-                );
-              }}
+          <TouchableOpacity onPress={() => navigation.navigate("UserProfile")}>
+            <Image
+              source={avatarSource}
+              style={styles.avatar}
+              contentFit="cover"
             />
-          )}
-        </>
-      )}
-      {/* Danh sách bài hát */}
-      <FlatList
-        data={loading ? Array(6).fill(0) : tracks} // Nếu loading thì hiện mảng giả để render Skeleton
-        keyExtractor={(item, index) => (loading ? index.toString() : item.id)}
-        ListHeaderComponent={renderHeader}
-        contentContainerStyle={{ paddingBottom: 150 }}
-        renderItem={({ item }) => {
-          if (loading) return <SkeletonItem />; // Render xương rồng
+          </TouchableOpacity>
+        </View>
 
-          const isTrackPlaying = currentTrack?.id === item.id && isPlaying;
-          
-          return (
-            <TouchableOpacity
-              style={[
-                styles.trackItem,
-                isTrackPlaying && styles.activeTrackItem,
-              ]}
-              onPress={() => playTrack(item)}
-              activeOpacity={0.7}
-            >
-              <Image
-                source={{ uri: item.album?.images?.[0]?.url || item.images?.[0]?.url }}
-                style={styles.albumArt}
-                transition={300}
-                contentFit="cover"
+        {/* 2. ARTIST / CIRCLE LIST */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>Top Artists</Text>
+          <FlatList
+            horizontal
+            data={artistData}
+            keyExtractor={(item) => `artist-${item.id}`}
+            renderItem={({ item }) => (
+              <CircleArtistItem
+                item={item}
+                onPress={() => playTrack(item, tracks)}
               />
+            )}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingLeft: 20 }}
+          />
+        </View>
 
-              <View style={{ flex: 1, justifyContent: 'center' }}>
-                <Text
-                  style={[
-                    styles.trackName,
-                    isTrackPlaying && { color: "#1DB954" },
-                  ]}
-                  numberOfLines={1}
-                >
+        {/* 3. TRENDING / RECENT (Cards) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>Trending Now</Text>
+          <FlatList
+            ref={trendingRef}
+            horizontal
+            data={listData}
+            keyExtractor={(item) => `trend-${item.id}`}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingLeft: 20 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.cardItem}
+                onPress={() => playTrack(item, tracks)}
+              >
+                <Image
+                  source={{ uri: item.album?.images?.[0]?.url }}
+                  style={styles.cardImage}
+                />
+                <Text style={styles.cardTitle} numberOfLines={1}>
                   {item.name}
                 </Text>
-                <Text style={styles.artistName} numberOfLines={1}>
-                  {item.artists.map((a: any) => a.name).join(", ")}
-                </Text>
-              </View>
+              </TouchableOpacity>
+            )}
+            scrollEventThrottle={16}
+            onScroll={onTrendingScroll}
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+          />
+        </View>
 
-              <TouchableOpacity onPress={() => {/* Thêm vào playlist logic sau này */}}>
+        {/* 4. VERTICAL LIST */}
+        <View style={styles.section}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              paddingRight: 20,
+              alignItems: "center",
+            }}
+          >
+            <Text style={styles.sectionHeader}>On Your Heavy Rotation</Text>
+            <TouchableOpacity onPress={logoutSpotify}>
+              <Text style={{ color: "#1DB954", fontSize: 12 }}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+
+          {listData.map((item, index) => {
+            const isTrackPlaying = currentTrack?.id === item.id && isPlaying;
+            return (
+              <TouchableOpacity
+                key={`list-${item.id}-${index}`}
+                style={styles.rowItem}
+                onPress={() => playTrack(item, tracks)}
+              >
+                <Text style={styles.indexText}>{index + 1}</Text>
+                <Image
+                  source={{ uri: item.album?.images?.[0]?.url }}
+                  style={styles.rowImage}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[
+                      styles.rowTitle,
+                      isTrackPlaying && { color: "#1DB954" },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
+                  <Text style={styles.rowSubTitle}>{item.artists[0].name}</Text>
+                </View>
                 <Ionicons
-                  name={isTrackPlaying ? "stats-chart" : "ellipsis-horizontal"}
-                  size={20}
-                  color={isTrackPlaying ? "#1DB954" : "#b3b3b3"}
+                  name="play-circle"
+                  size={24}
+                  color={isTrackPlaying ? "#1DB954" : "#444"}
                 />
               </TouchableOpacity>
-            </TouchableOpacity>
-          );
-        }}
-      />
+            );
+          })}
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#121212" },
-  
-  // Login Screen Styles
-  centerContainer: { 
-    flex: 1, 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: "#121212",
-    padding: 20 
+  container: { flex: 1, backgroundColor: "#000" },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000",
   },
-  loginTitle: { color: "white", fontSize: 40, fontWeight: "bold", marginBottom: 10 },
-  loginSub: { color: "gray", fontSize: 16, marginBottom: 40 },
-  loginButton: {
+
+  // Login
+  loginBtn: {
     backgroundColor: "#1DB954",
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 30,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 25,
   },
-  loginButtonText: { color: "black", fontWeight: "bold", fontSize: 16, textTransform: "uppercase" },
+  btnText: { color: "black", fontWeight: "bold" },
 
-  // Header Styles
-  headerContainer: {
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    marginBottom: 10,
+  // --- Banner Styles ---
+  bannerContent: {
+    position: "absolute",
+    bottom: 30,
+    left: 20,
+    right: 20,
   },
-  gradientBackground: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: 300,
-  },
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
-  profileSection: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  avatar: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)'
-  },
-  greetingText: { color: "#b3b3b3", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5 },
-  userNameText: { color: "white", fontSize: 18, fontWeight: "bold" },
-  sectionTitle: { color: "white", fontSize: 22, fontWeight: "bold", marginBottom: 15 },
-
-  // Track List Styles
-  trackItem: {
-    flexDirection: "row",
-    marginBottom: 10,
-    alignItems: "center",
-    padding: 10,
-    marginHorizontal: 10,
-    borderRadius: 8,
-  },
-  activeTrackItem: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  albumArt: { width: 56, height: 56, borderRadius: 4, marginRight: 15 },
-  trackName: { color: "white", fontSize: 16, fontWeight: "500", marginBottom: 4 },
-  artistName: { color: "#b3b3b3", fontSize: 13 },
-
-  // Skeleton Styles
-  skeletonBox: {
-    backgroundColor: "#333",
+  tagContainer: {
+    backgroundColor: "#1DB954",
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 4,
-  }
+    marginBottom: 8,
+  },
+  tagText: { fontSize: 10, fontWeight: "bold", color: "black" },
+  bannerTitle: {
+    color: "white",
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    textTransform: "capitalize",
+  },
+  bannerSubtitle: {
+    color: "#ddd",
+    fontSize: 16,
+    marginTop: 4,
+    fontWeight: "500",
+  },
+
+  // Dots
+  paginationDotContainer: {
+    position: "absolute",
+    bottom: 10,
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "white",
+    marginHorizontal: 4,
+  },
+
+  // --- Greeting ---
+  greetingContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  greetingTitle: { color: "white", fontSize: 32, fontWeight: "bold" },
+  greetingText: {
+    color: "#b3b3b3", // Màu xám nhạt cho câu chào
+    fontSize: 14,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  userNameText: {
+    color: "white",
+    fontSize: 24, // Tên to rõ ràng
+    fontWeight: "bold",
+    marginTop: 2,
+    maxWidth: 250, // Giới hạn chiều rộng để không đè lên avatar
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: "#1DB954", // Viền xanh Spotify cho nổi bật
+  },
+
+  // --- Sections ---
+  section: { marginTop: 25 },
+  sectionHeader: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "700",
+    paddingLeft: 20,
+    marginBottom: 15,
+  },
+
+  // Card Item
+  cardItem: { marginRight: 15, width: 140 },
+  cardImage: { width: 140, height: 140, borderRadius: 12, marginBottom: 8 },
+  cardTitle: { color: "#fff", fontSize: 13, fontWeight: "600" },
+
+  // Row Item
+  rowItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+  },
+  indexText: { color: "#555", fontSize: 16, width: 30, fontWeight: "bold" },
+  rowImage: { width: 50, height: 50, borderRadius: 8, marginRight: 15 },
+  rowTitle: { color: "white", fontSize: 15, fontWeight: "600" },
+  rowSubTitle: { color: "#888", fontSize: 13, marginTop: 2 },
 });
