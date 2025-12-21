@@ -21,17 +21,9 @@ import { signOut } from "firebase/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 
-import { SPOTIFY_CONFIG } from "../config/spotifyConfig";
-import {
-  exchangeCodeForToken,
-  getUserProfile,
-  getUserTopTracks,
-  saveToken,
-  getSavedToken,
-} from "../services/spotifyService";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import { useMusic } from "../context/MusicContext";
+import { useSpotifyAuth } from "../context/SpotifyAuthContext";
+import { getUserTopTracks } from "../services/spotifyService";
 import { useUser } from "../context/UserContext"; // Import Context User
 
 WebBrowser.maybeCompleteAuthSession();
@@ -74,28 +66,18 @@ export default function HomeScreen() {
   // Lấy dữ liệu user từ Firestore (Realtime update)
   const { userProfile: firestoreUser } = useUser();
 
-  const [request, response, promptAsync] = useAuthRequest(
-    {
-      responseType: ResponseType.Code,
-      clientId: SPOTIFY_CONFIG.clientId,
-      scopes: SPOTIFY_CONFIG.scopes,
-      usePKCE: true,
-      redirectUri: SPOTIFY_CONFIG.redirectUri,
-    },
-    SPOTIFY_CONFIG.discovery
-  );
+  const { token, loading, userProfile, connectSpotify, logoutSpotify } =
+    useSpotifyAuth();
 
   useEffect(() => {
-    if (response?.type === "success") {
-      const { code } = response.params;
-      handleExchangeToken(code);
-    }
-  }, [response]);
+    if (!token || !auth.currentUser) return;
+    loadTracks();
+  }, [token]);
 
-  useEffect(() => {
-    checkLogin();
-  }, []);
-
+  const loadTracks = async () => {
+    try {
+      const data = await getUserTopTracks(token!);
+      setTracks(data.items || []);
   const checkLogin = async () => {
     setLoading(true);
     const savedToken = await getSavedToken();
@@ -125,6 +107,21 @@ export default function HomeScreen() {
     }
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      "Đăng xuất",
+      "Bạn có chắc chắn muốn đăng xuất không?",
+      [
+        {
+          text: "Hủy",
+          style: "cancel",
+        },
+        {
+          text: "Đăng xuất",
+          style: "destructive",
+          onPress: async () => {
+            await logoutSpotify();
+          },
   const handleExchangeToken = async (code: string) => {
     setLoading(true);
     try {
@@ -167,8 +164,9 @@ export default function HomeScreen() {
             console.error("Logout error:", error);
           }
         },
-      },
-    ]);
+      ],
+      { cancelable: true }
+    );
   };
 
   // Logic chào hỏi theo giờ
@@ -220,6 +218,8 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+          <Text style={styles.logoutText}>Log Out</Text>
         <Text style={styles.sectionTitle}>Your Top Mixes</Text>
       </View>
     );
@@ -246,6 +246,75 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      {loading ? (
+        <ActivityIndicator size="large" color="#1DB954" />
+      ) : (
+        <>
+          {!token && (
+            <View style={styles.center}>
+              <Button title="Connect Spotify" onPress={connectSpotify} />
+            </View>
+          )}
+          {token && (
+            <FlatList
+              data={tracks}
+              keyExtractor={(item) => item.id}
+              ListHeaderComponent={renderHeader}
+              contentContainerStyle={{
+                padding: 20,
+                paddingTop: 50,
+                paddingBottom: 150,
+              }}
+              renderItem={({ item }) => {
+                const isTrackPlaying =
+                  currentTrack?.id === item.id && isPlaying;
+
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.trackItem,
+                      isTrackPlaying && { backgroundColor: "#282828" },
+                    ]}
+                    onPress={() => playTrack(item, tracks)}
+                  >
+                    {/* Album Art */}
+                    <Image
+                      source={{
+                        uri:
+                          item.album?.images?.[0]?.url || item.images?.[0]?.url,
+                      }}
+                      style={styles.albumArt}
+                    />
+
+                    {/* Track Info */}
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.trackName,
+                          isTrackPlaying && { color: "#1DB954" },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      <Text style={styles.artistName}>
+                        {item.artists.map((a: any) => a.name).join(", ")}
+                      </Text>
+                    </View>
+
+                    {/* Play/Pause Icon */}
+                    <Ionicons
+                      name={isTrackPlaying ? "pause-circle" : "play-circle"}
+                      size={32}
+                      color={isTrackPlaying ? "#1DB954" : "white"}
+                    />
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          )}
+        </>
+      )}
       {/* Danh sách bài hát */}
       <FlatList
         data={loading ? Array(6).fill(0) : tracks} // Nếu loading thì hiện mảng giả để render Skeleton
