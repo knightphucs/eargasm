@@ -14,6 +14,7 @@ import {
   Platform,
   UIManager,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -166,6 +167,25 @@ export default function LibraryScreen() {
           </View>
         </View>
 
+        {/* Liked Songs Card */}
+        <TouchableOpacity
+          style={styles.likedSongsCard}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.navigate("LikedSongs");
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.likedSongsIcon}>
+            <Ionicons name="heart" size={32} color="white" />
+          </View>
+          <View style={styles.likedSongsInfo}>
+            <Text style={styles.likedSongsTitle}>Liked Songs</Text>
+            <Text style={styles.likedSongsSubtitle}>Your favorite tracks</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#888" />
+        </TouchableOpacity>
+
         {/* Playlist List */}
         {loading ? (
           <ActivityIndicator
@@ -197,8 +217,11 @@ export default function LibraryScreen() {
             renderItem={({ item, index }) => (
               <TouchableOpacity
                 style={viewMode === "grid" ? styles.gridItem : styles.listItem}
-                //Truyền index vào hàm
-                onPress={() => openPlaylistDetail(item, index)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  openPlaylistDetail(item, index);
+                }}
+                activeOpacity={0.7}
               >
                 <Image
                   source={{

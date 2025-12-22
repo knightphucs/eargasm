@@ -9,7 +9,9 @@ import {
   Image,
   Dimensions,
   Animated,
+  Easing,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 
 const { width, height } = Dimensions.get("window");
@@ -45,14 +47,15 @@ export const QueueModal = ({
     if (visible) {
       Animated.spring(slideAnim, {
         toValue: 0,
-        friction: 8,
-        tension: 40,
+        friction: 10,
+        tension: 60,
         useNativeDriver: true,
       }).start();
     } else {
       Animated.timing(slideAnim, {
         toValue: height,
-        duration: 300,
+        duration: 250,
+        easing: Easing.bezier(0.4, 0.0, 0.2, 1),
         useNativeDriver: true,
       }).start();
     }
@@ -71,7 +74,10 @@ export const QueueModal = ({
       <TouchableOpacity
         activeOpacity={0.7}
         style={[styles.queueItem, isCurrentTrack && styles.queueItemActive]}
-        onPress={() => onTrackSelect(item)}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onTrackSelect(item);
+        }}
       >
         {/* Album Art */}
         <Image

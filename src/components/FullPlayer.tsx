@@ -8,12 +8,18 @@ import {
   Dimensions,
   PanResponder,
   StatusBar,
+  Easing,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useMusic } from "../context/MusicContext";
 import { QueueModal } from "./QueueModal";
 import Slider from "@react-native-community/slider";
+import { AudioVisualizer, CircularVisualizer } from "./AudioVisualizer";
+import { SleepTimer } from "./SleepTimer";
+import { db, auth } from "../config/firebaseConfig";
+import { doc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -34,8 +40,15 @@ export default function FullPlayer() {
 
   const [queueVisible, setQueueVisible] = useState(false);
   const [queue, setQueue] = useState<any[]>([]);
+  const [sleepTimerVisible, setSleepTimerVisible] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+  const [showHeartAnim, setShowHeartAnim] = useState(false);
 
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const playButtonScale = useRef(new Animated.Value(1)).current;
+  const heartScale = useRef(new Animated.Value(0)).current;
+  const heartOpacity = useRef(new Animated.Value(0)).current;
+  const lastTap = useRef<number>(0);
 
   const formatTime = (millis: number) => {
     const totalSeconds = Math.floor(millis / 1000);
@@ -76,8 +89,8 @@ export default function FullPlayer() {
         } else {
           Animated.spring(translateY, {
             toValue: 0,
-            friction: 7,
-            tension: 60,
+            friction: 9,
+            tension: 80,
             useNativeDriver: true,
           }).start();
         }
@@ -88,7 +101,8 @@ export default function FullPlayer() {
   const closeAnim = () => {
     Animated.timing(translateY, {
       toValue: SCREEN_HEIGHT,
-      duration: 250,
+      duration: 220,
+      easing: Easing.bezier(0.4, 0.0, 0.2, 1),
       useNativeDriver: true,
     }).start(() => {
       collapsePlayer();
@@ -98,13 +112,154 @@ export default function FullPlayer() {
   useEffect(() => {
     Animated.spring(translateY, {
       toValue: 0,
-      friction: 8,
-      tension: 65,
+      friction: 10,
+      tension: 80,
       useNativeDriver: true,
     }).start();
   }, []);
 
-  if (!currentTrack) return null;
+  // Animate play button on play/pause
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(playButtonScale, {
+        toValue: 0.85,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.spring(playButtonScale, {
+        toValue: 1,
+        friction: 3,
+        tension: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isPlaying]);
+
+  // Check if track is liked
+  useEffect(() => {
+    const checkLikedStatus = async () => {
+      if (!currentTrack) {
+        setIsLiked(false);
+        return;
+      }
+
+      if (!auth.currentUser) {
+        if (__DEV__)
+          console.log("⚠️ Cannot check liked status: user not authenticated");
+        setIsLiked(false);
+        return;
+      }
+
+      try {
+        const likedRef = doc(
+          db,
+          "users",
+          auth.currentUser.uid,
+          "liked_songs",
+          currentTrack.id
+        );
+        const likedDoc = await getDoc(likedRef);
+        setIsLiked(likedDoc.exists());
+      } catch (error: any) {
+        // Silently handle Firebase permission errors
+        if (__DEV__) {
+          if (error?.code === "permission-denied") {
+            console.log(
+              "⚠️ Firebase permissions issue - liked check failed (non-critical)"
+            );
+          } else {
+            console.error("Error checking liked status:", error);
+          }
+        }
+        setIsLiked(false);
+      }
+    };
+    checkLikedStatus();
+  }, [currentTrack]);
+
+  const handleDoubleTap = async () => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+
+    if (now - lastTap.current < DOUBLE_TAP_DELAY) {
+      // Double tap detected!
+      lastTap.current = 0;
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      try {
+        const user = auth.currentUser;
+        if (!user || !currentTrack) return;
+
+        const likedRef = doc(
+          db,
+          "users",
+          user.uid,
+          "liked_songs",
+          currentTrack.id
+        );
+
+        if (isLiked) {
+          // Unlike
+          await deleteDoc(likedRef);
+          setIsLiked(false);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        } else {
+          // Like
+          await setDoc(likedRef, {
+            trackId: currentTrack.id,
+            name: currentTrack.name,
+            artists: currentTrack.artists,
+            album: currentTrack.album,
+            uri: currentTrack.uri,
+            likedAt: new Date().toISOString(),
+          });
+          setIsLiked(true);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+          // Show heart animation
+          setShowHeartAnim(true);
+          Animated.parallel([
+            Animated.sequence([
+              Animated.timing(heartScale, {
+                toValue: 1.2,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.spring(heartScale, {
+                toValue: 1,
+                friction: 3,
+                tension: 100,
+                useNativeDriver: true,
+              }),
+            ]),
+            Animated.sequence([
+              Animated.timing(heartOpacity, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.delay(500),
+              Animated.timing(heartOpacity, {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+              }),
+            ]),
+          ]).start(() => {
+            setShowHeartAnim(false);
+            heartScale.setValue(0);
+            heartOpacity.setValue(0);
+          });
+        }
+      } catch (error) {
+        if (__DEV__) console.error("Error toggling like:", error);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } else {
+      lastTap.current = now;
+    }
+  };
 
   return (
     <>
@@ -124,13 +279,24 @@ export default function FullPlayer() {
             >
               <Ionicons name="chevron-down" size={28} color="white" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>NOW PLAYING</Text>
-            <TouchableOpacity
-              onPress={() => setQueueVisible(true)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="list" size={28} color="white" />
-            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { marginLeft: 35 }]}>
+              NOW PLAYING
+            </Text>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                onPress={() => setSleepTimerVisible(true)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ marginRight: 16 }}
+              >
+                <Ionicons name="moon-outline" size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setQueueVisible(true)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="list" size={28} color="white" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -138,16 +304,55 @@ export default function FullPlayer() {
         <View style={styles.contentContainer}>
           {/* Artwork */}
           <View style={styles.artworkContainer}>
-            <Image
-              source={{
-                uri:
-                  currentTrack.album?.images[0]?.url ||
-                  "https://via.placeholder.com/300",
-              }}
-              style={styles.cover}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              transition={300}
+            <CircularVisualizer isPlaying={isPlaying} size={280} />
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={handleDoubleTap}
+              style={{ position: "relative" }}
+            >
+              <Image
+                source={{
+                  uri:
+                    currentTrack.album?.images[0]?.url ||
+                    "https://via.placeholder.com/300",
+                }}
+                style={styles.cover}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={300}
+              />
+
+              {/* Heart Animation Overlay */}
+              {showHeartAnim && (
+                <Animated.View
+                  style={[
+                    styles.heartOverlay,
+                    {
+                      transform: [{ scale: heartScale }],
+                      opacity: heartOpacity,
+                    },
+                  ]}
+                >
+                  <Ionicons name="heart" size={120} color="#E91E63" />
+                </Animated.View>
+              )}
+
+              {/* Liked Indicator */}
+              {isLiked && (
+                <View style={styles.likedIndicator}>
+                  <Ionicons name="heart" size={24} color="#E91E63" />
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Audio Visualizer */}
+          <View style={styles.visualizerContainer}>
+            <AudioVisualizer
+              isPlaying={isPlaying}
+              barCount={35}
+              barWidth={3}
+              barGap={3}
             />
           </View>
 
@@ -184,22 +389,39 @@ export default function FullPlayer() {
 
           {/* Controls */}
           <View style={styles.controls}>
-            <TouchableOpacity onPress={playPrevious} activeOpacity={0.7}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                playPrevious();
+              }}
+              activeOpacity={0.6}
+            >
               <Ionicons name="play-skip-back" size={35} color="white" />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => playTrack(currentTrack)}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={isPlaying ? "pause-circle" : "play-circle"}
-                size={80}
-                color="white"
-              />
-            </TouchableOpacity>
+            <Animated.View style={{ transform: [{ scale: playButtonScale }] }}>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  playTrack(currentTrack);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={isPlaying ? "pause-circle" : "play-circle"}
+                  size={80}
+                  color="white"
+                />
+              </TouchableOpacity>
+            </Animated.View>
 
-            <TouchableOpacity onPress={playNext} activeOpacity={0.7}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                playNext();
+              }}
+              activeOpacity={0.6}
+            >
               <Ionicons name="play-skip-forward" size={35} color="white" />
             </TouchableOpacity>
           </View>
@@ -219,6 +441,17 @@ export default function FullPlayer() {
           setQueue(queue.filter((t) => t.id !== trackId));
         }}
       />
+
+      <SleepTimer
+        visible={sleepTimerVisible}
+        onClose={() => setSleepTimerVisible(false)}
+        onTimerEnd={() => {
+          // Stop music when timer ends
+          if (isPlaying) {
+            playTrack(currentTrack);
+          }
+        }}
+      />
     </>
   );
 }
@@ -234,7 +467,7 @@ const styles = StyleSheet.create({
     zIndex: 99999,
   },
   headerContainer: {
-    paddingTop: 40,
+    paddingTop: 60,
     paddingBottom: 10,
     backgroundColor: "transparent",
   },
@@ -243,6 +476,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 25,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   headerTitle: {
     color: "#fff",
@@ -263,12 +500,37 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.44,
     shadowRadius: 10.32,
     elevation: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  visualizerContainer: {
+    marginTop: 20,
+    marginBottom: 10,
   },
   cover: {
     width: SCREEN_WIDTH - 60,
     height: SCREEN_WIDTH - 60,
     borderRadius: 12,
     backgroundColor: "#333",
+  },
+  heartOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.3)",
+    borderRadius: 12,
+  },
+  likedIndicator: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 20,
+    padding: 8,
   },
   trackInfo: {
     alignItems: "center",

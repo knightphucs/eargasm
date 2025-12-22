@@ -25,6 +25,9 @@ interface MusicContextType {
   seekTo: (value: number) => Promise<void>;
   playNext: () => Promise<void>;
   playPrevious: () => Promise<void>;
+  addToQueue: (track: any) => void;
+  removeFromQueue: (trackId: string) => void;
+  queue: any[];
 }
 
 const MusicContext = createContext<MusicContextType | undefined>(undefined);
@@ -32,6 +35,10 @@ const MusicContext = createContext<MusicContextType | undefined>(undefined);
 export const MusicProvider = ({ children }: { children: ReactNode }) => {
   const soundRef = useRef<Audio.Sound | null>(null);
   const playStartTimeRef = useRef<number | null>(null);
+
+  // Use refs to keep latest queue/index for playNext/playPrevious
+  const queueRef = useRef<any[]>([]);
+  const currentIndexRef = useRef<number>(-1);
 
   const seekTo = async (value: number) => {
     if (!soundRef.current) return;
@@ -55,12 +62,24 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
   const saveListeningHistory = useCallback(async (track: any) => {
     try {
       const user = auth.currentUser;
-      if (!user || !playStartTimeRef.current) return;
+      if (!user) {
+        if (__DEV__)
+          console.log("⚠️ Cannot save history: user not authenticated");
+        return;
+      }
+
+      if (!playStartTimeRef.current) {
+        if (__DEV__) console.log("⚠️ Cannot save history: no play start time");
+        return;
+      }
 
       const playDuration = Date.now() - playStartTimeRef.current;
 
       // Only save if played for at least 3 seconds
-      if (playDuration < 3000) return;
+      if (playDuration < 3000) {
+        if (__DEV__) console.log("⚠️ Not saving history: played < 3s");
+        return;
+      }
 
       const historyRef = collection(db, "users", user.uid, "listening_history");
 
@@ -74,23 +93,85 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
         duration: playDuration,
         playedAt: Timestamp.now(),
       });
+
+      if (__DEV__) console.log("✅ Saved listening history for:", track.name);
     } catch (error) {
-      if (__DEV__) console.error("Failed to save listening history:", error);
+      // Silently fail for Firebase permission errors - don't block playback
+      if (__DEV__) {
+        if (error.code === "permission-denied") {
+          console.log(
+            "⚠️ Firebase permissions issue - history not saved (non-critical)"
+          );
+        } else {
+          console.error("Failed to save listening history:", error);
+        }
+      }
     }
   }, []);
 
   const playNext = async () => {
-    if (queue.length === 0) return;
-    const nextIndex = (currentIndex + 1) % queue.length;
-    setCurrentIndex(nextIndex);
-    await playTrack(queue[nextIndex]);
+    const currentQueue = queueRef.current;
+    const currentIdx = currentIndexRef.current;
+
+    if (__DEV__) {
+      console.log(
+        "🔍 playNext called - queue length:",
+        currentQueue.length,
+        "currentIndex:",
+        currentIdx
+      );
+      console.log(
+        "🔍 Queue preview:",
+        currentQueue.map((t) => t.name).slice(0, 3)
+      );
+    }
+
+    if (currentQueue.length === 0) {
+      if (__DEV__) console.log("❌ playNext: queue is empty");
+      return;
+    }
+    const nextIndex = (currentIdx + 1) % currentQueue.length;
+    if (__DEV__)
+      console.log(
+        "✅ playNext: moving to index",
+        nextIndex,
+        "/",
+        currentQueue.length
+      );
+    await playTrack(currentQueue[nextIndex], currentQueue);
   };
 
   const playPrevious = async () => {
-    if (queue.length === 0) return;
-    const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
-    setCurrentIndex(prevIndex);
-    await playTrack(queue[prevIndex]);
+    const currentQueue = queueRef.current;
+    const currentIdx = currentIndexRef.current;
+
+    if (__DEV__) {
+      console.log(
+        "🔍 playPrevious called - queue length:",
+        currentQueue.length,
+        "currentIndex:",
+        currentIdx
+      );
+      console.log(
+        "🔍 Queue preview:",
+        currentQueue.map((t) => t.name).slice(0, 3)
+      );
+    }
+
+    if (currentQueue.length === 0) {
+      if (__DEV__) console.log("❌ playPrevious: queue is empty");
+      return;
+    }
+    const prevIndex =
+      (currentIdx - 1 + currentQueue.length) % currentQueue.length;
+    if (__DEV__)
+      console.log(
+        "✅ playPrevious: moving to index",
+        prevIndex,
+        "/",
+        currentQueue.length
+      );
+    await playTrack(currentQueue[prevIndex], currentQueue);
   };
 
   const playTrack = async (track: any, list?: any[]) => {
@@ -105,26 +186,63 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // Nếu truyền danh sách bài → set queue
-      if (list) {
+      if (list && list.length > 0) {
+        if (__DEV__)
+          console.log("📋 Setting queue with", list.length, "tracks");
+        queueRef.current = list;
         setQueue(list);
         const index = list.findIndex((t) => t.id === track.id);
+        currentIndexRef.current = index;
         setCurrentIndex(index);
+      } else if (queue.length > 0) {
+        // If no list provided but queue exists, find track in existing queue
+        const existingIndex = queue.findIndex((t) => t.id === track.id);
+        if (existingIndex !== -1) {
+          if (__DEV__)
+            console.log(
+              "📋 Using existing queue, setting index to",
+              existingIndex
+            );
+          currentIndexRef.current = existingIndex;
+          setCurrentIndex(existingIndex);
+        } else {
+          if (__DEV__)
+            console.warn(
+              "⚠️ playTrack called without list, and track not in queue"
+            );
+        }
+      } else {
+        if (__DEV__)
+          console.warn("⚠️ playTrack called without list and queue is empty");
       }
 
+      // Toggle play/pause if same track
       if (currentTrack?.id === track.id && soundRef.current) {
-        if (isPlaying) {
-          await soundRef.current.pauseAsync();
-          setIsPlaying(false);
+        const status = await soundRef.current.getStatusAsync();
+
+        if (!status.isLoaded) {
+          if (__DEV__) console.log("⚠️ Track not loaded, reloading...");
+          // Fallback: reload track
+        } else if (status.isPlaying) {
+          // Pause with proper state check
+          await pauseTrack();
+          return;
         } else {
-          await soundRef.current.playAsync();
-          setIsPlaying(true);
+          // Resume with proper state check
+          await resumeTrack();
+          return;
         }
-        return;
       }
 
       if (soundRef.current) {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
+        // Stop immediately - no fade out for instant response
+        try {
+          await soundRef.current.stopAsync();
+          await soundRef.current.unloadAsync();
+        } catch (e) {
+          // Ignore if already stopped
+          if (__DEV__) console.log("⚠️ Error stopping old track:", e);
+        }
         soundRef.current = null;
       }
 
@@ -134,10 +252,16 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
 
       const { sound } = await Audio.Sound.createAsync(
         { uri: previewUrl },
-        { shouldPlay: true }
+        { shouldPlay: false, volume: 0 }
       );
 
       soundRef.current = sound;
+
+      // Quick fade in - 2 steps only
+      await sound.playAsync();
+      await sound.setVolumeAsync(0.5);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      await sound.setVolumeAsync(1);
 
       sound.setOnPlaybackStatusUpdate((status: any) => {
         if (!status.isLoaded) return;
@@ -154,23 +278,121 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const pauseTrack = async () => {
-    if (soundRef.current) {
-      await soundRef.current.pauseAsync();
+    if (!soundRef.current) return;
+
+    try {
+      const status = await soundRef.current.getStatusAsync();
+      if (!status.isLoaded) {
+        if (__DEV__) console.log("⚠️ Cannot pause: sound not loaded");
+        setIsPlaying(false);
+        return;
+      }
+
+      if (!status.isPlaying) {
+        if (__DEV__) console.log("⚠️ Already paused");
+        setIsPlaying(false);
+        return;
+      }
+
+      // Immediate state update to prevent UI lag
       setIsPlaying(false);
+
+      // Quick fade out (reduced time)
+      await soundRef.current.setVolumeAsync(0.3);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      await soundRef.current.setVolumeAsync(0);
+
+      // Pause immediately
+      await soundRef.current.pauseAsync();
+
+      // Reset volume for next play
+      await soundRef.current.setVolumeAsync(1);
+
+      if (__DEV__) console.log("✅ Paused successfully");
+    } catch (e) {
+      if (__DEV__) console.error("❌ Pause error:", e);
+      setIsPlaying(false);
+      // Force pause without fade
+      try {
+        await soundRef.current.pauseAsync();
+      } catch (fallbackError) {
+        if (__DEV__) console.error("❌ Fallback pause failed:", fallbackError);
+      }
     }
   };
 
   const resumeTrack = async () => {
-    if (soundRef.current) {
-      await soundRef.current.playAsync();
+    if (!soundRef.current) return;
+
+    try {
+      const status = await soundRef.current.getStatusAsync();
+      if (!status.isLoaded) {
+        if (__DEV__) console.log("⚠️ Cannot resume: sound not loaded");
+        setIsPlaying(false);
+        return;
+      }
+
+      if (status.isPlaying) {
+        if (__DEV__) console.log("⚠️ Already playing");
+        setIsPlaying(true);
+        return;
+      }
+
+      // Immediate state update
       setIsPlaying(true);
+
+      // Quick fade in (reduced time)
+      await soundRef.current.setVolumeAsync(0);
+      await soundRef.current.playAsync();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      await soundRef.current.setVolumeAsync(0.5);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      await soundRef.current.setVolumeAsync(1);
+
+      if (__DEV__) console.log("✅ Resumed successfully");
+    } catch (e) {
+      if (__DEV__) console.error("❌ Resume error:", e);
+      setIsPlaying(false);
+      // Force play without fade
+      try {
+        await soundRef.current.playAsync();
+        setIsPlaying(true);
+      } catch (fallbackError) {
+        if (__DEV__) console.error("❌ Fallback resume failed:", fallbackError);
+      }
     }
   };
 
   const closePlayer = async () => {
-    if (soundRef.current) {
-      await soundRef.current.stopAsync();
-      await soundRef.current.unloadAsync();
+    try {
+      if (soundRef.current) {
+        // Get status first
+        const status = await soundRef.current.getStatusAsync();
+
+        if (__DEV__)
+          console.log(
+            "🔴 Closing player - status:",
+            status.isLoaded,
+            status.isPlaying
+          );
+
+        // Stop if playing - with volume fade for clean stop
+        if (status.isLoaded) {
+          // Mute immediately
+          await soundRef.current.setVolumeAsync(0);
+
+          if (status.isPlaying) {
+            await soundRef.current.pauseAsync(); // Pause first
+            await soundRef.current.stopAsync(); // Then stop
+          }
+          await soundRef.current.unloadAsync();
+        }
+        soundRef.current = null;
+        if (__DEV__) console.log("✅ Player closed and sound stopped");
+      }
+    } catch (e) {
+      if (__DEV__) console.error("⚠️ Error closing player:", e);
+      // Force clear ref even if error
       soundRef.current = null;
     }
 
@@ -181,6 +403,28 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
 
     setCurrentTrack(null);
     setIsPlaying(false);
+  };
+
+  const addToQueue = (track: any) => {
+    if (__DEV__) console.log("➕ Adding to queue:", track.name);
+    setQueue((prevQueue) => {
+      const newQueue = [...prevQueue, track];
+      if (__DEV__) console.log("✅ Queue now has", newQueue.length, "tracks");
+      return newQueue;
+    });
+  };
+
+  const removeFromQueue = (trackId: string) => {
+    if (__DEV__) console.log("➖ Removing from queue:", trackId);
+    setQueue((prevQueue) => {
+      const newQueue = prevQueue.filter((t) => t.id !== trackId);
+      // Adjust currentIndex if needed
+      if (currentIndex >= newQueue.length) {
+        setCurrentIndex(Math.max(0, newQueue.length - 1));
+      }
+      if (__DEV__) console.log("✅ Queue now has", newQueue.length, "tracks");
+      return newQueue;
+    });
   };
 
   return (
@@ -200,6 +444,9 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
         seekTo,
         playNext,
         playPrevious,
+        addToQueue,
+        removeFromQueue,
+        queue,
       }}
     >
       {children}

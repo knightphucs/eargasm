@@ -12,7 +12,9 @@ import {
   TextInput,
   Alert,
   Dimensions,
+  Animated,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import {
@@ -152,25 +154,39 @@ export default function PlaylistDetailScreen() {
   };
 
   const handleDelete = async (track: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
     const token = await getSavedToken();
     if (!token) return;
 
-    await removeTrackFromPlaylist(token, currentPlaylist.id, track.uri);
+    try {
+      // Animate removal
+      await removeTrackFromPlaylist(token, currentPlaylist.id, track.uri);
 
-    const trackRef = doc(
-      db,
-      "playlists",
-      currentPlaylist.id,
-      "tracks",
-      track.id
-    );
-    await deleteDoc(trackRef);
+      const trackRef = doc(
+        db,
+        "playlists",
+        currentPlaylist.id,
+        "tracks",
+        track.id
+      );
+      await deleteDoc(trackRef);
 
-    const newTracks = tracks.filter((t) => t.track.id !== track.id);
-    setTracks(newTracks);
+      // Update state with smooth transition
+      const newTracks = tracks.filter((t) => t.track.id !== track.id);
+      setTracks(newTracks);
 
-    const playlistRef = doc(db, "playlists", currentPlaylist.id);
-    updateDoc(playlistRef, { trackCount: newTracks.length });
+      const playlistRef = doc(db, "playlists", currentPlaylist.id);
+      updateDoc(playlistRef, { trackCount: newTracks.length });
+
+      // Success haptic
+      setTimeout(() => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }, 150);
+    } catch (error) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Lỗi", "Không thể xóa bài hát");
+    }
   };
 
   const renderRightActions = (progress: any, dragX: any, track: any) => (
@@ -236,13 +252,14 @@ export default function PlaylistDetailScreen() {
           <TouchableOpacity
             style={{ flex: 1, marginRight: 15 }}
             onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               if (tracks.length > 0)
                 playTrack(
                   tracks[0].track,
                   tracks.map((t) => t.track)
                 );
             }}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
           >
             <LinearGradient
               colors={["#E91E63", "#9C27B0"]}
@@ -346,66 +363,80 @@ export default function PlaylistDetailScreen() {
                   const active = currentTrack?.id === track.id && isPlaying;
                   return (
                     <Swipeable
+                      ref={(ref) => {
+                        if (ref) rowRefs.current.set(track.id, ref);
+                      }}
                       renderRightActions={(p, d) =>
                         renderRightActions(p, d, track)
                       }
+                      overshootRight={false}
                     >
-                      <TouchableOpacity
-                        style={[
-                          styles.rowCard,
-                          active && {
-                            borderColor: "#E91E63",
-                            borderWidth: 1,
-                            backgroundColor: "rgba(233, 30, 99, 0.1)",
-                          },
-                        ]}
-                        onPress={() =>
-                          playTrack(
-                            track,
-                            tracks.map((t) => t.track)
-                          )
-                        }
-                        activeOpacity={0.8}
+                      <Animatable.View
+                        animation="fadeInRight"
+                        duration={300}
+                        delay={index * 30}
+                        useNativeDriver
                       >
-                        <Text
-                          style={{
-                            color: "#888",
-                            marginRight: 10,
-                            width: 20,
-                            textAlign: "center",
-                          }}
-                        >
-                          {index + 1}
-                        </Text>
-                        <Image
-                          source={{ uri: track.album.images[0]?.url }}
-                          style={styles.thumb}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              styles.tName,
-                              active && { color: "#E91E63" },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {track.name}
-                          </Text>
-                          <Text style={styles.tArtist} numberOfLines={1}>
-                            {track.artists[0].name}
-                          </Text>
-                        </View>
                         <TouchableOpacity
-                          style={{ padding: 5 }}
+                          style={[
+                            styles.rowCard,
+                            active && {
+                              borderColor: "#E91E63",
+                              borderWidth: 1,
+                              backgroundColor: "rgba(233, 30, 99, 0.1)",
+                            },
+                          ]}
+                          onPress={() => {
+                            Haptics.impactAsync(
+                              Haptics.ImpactFeedbackStyle.Light
+                            );
+                            playTrack(
+                              track,
+                              tracks.map((t) => t.track)
+                            );
+                          }}
                           activeOpacity={0.7}
                         >
-                          <Ionicons
-                            name="ellipsis-vertical"
-                            size={20}
-                            color="#bbb"
+                          <Text
+                            style={{
+                              color: "#888",
+                              marginRight: 10,
+                              width: 20,
+                              textAlign: "center",
+                            }}
+                          >
+                            {index + 1}
+                          </Text>
+                          <Image
+                            source={{ uri: track.album.images[0]?.url }}
+                            style={styles.thumb}
                           />
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.tName,
+                                active && { color: "#E91E63" },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {track.name}
+                            </Text>
+                            <Text style={styles.tArtist} numberOfLines={1}>
+                              {track.artists[0].name}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={{ padding: 5 }}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons
+                              name="ellipsis-vertical"
+                              size={20}
+                              color="#bbb"
+                            />
+                          </TouchableOpacity>
                         </TouchableOpacity>
-                      </TouchableOpacity>
+                      </Animatable.View>
                     </Swipeable>
                   );
                 }}

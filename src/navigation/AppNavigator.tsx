@@ -10,6 +10,7 @@ import SearchScreen from "../screens/SearchScreen";
 import UserProfileScreen from "../screens/UserProfileScreen";
 import LibraryScreen from "../screens/LibraryScreen";
 import PlaylistDetailScreen from "../screens/PlaylistDetailScreen";
+import LikedSongsScreen from "../screens/LikedSongsScreen";
 
 // Components & Context
 import { MusicProvider, useMusic } from "../context/MusicContext";
@@ -69,6 +70,11 @@ const RootNavigation = () => {
           name="UserProfile"
           component={UserProfileScreen}
           options={{ title: "Profile" }}
+        />
+        <Stack.Screen
+          name="LikedSongs"
+          component={LikedSongsScreen}
+          options={{ headerShown: false, title: "Liked Songs" }}
         />
         <Stack.Screen
           name="PlaylistDetail"

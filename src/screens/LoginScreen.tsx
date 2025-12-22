@@ -8,6 +8,7 @@ import {
   Text,
   Alert,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -115,12 +116,22 @@ export default function LoginScreen() {
 
         <TouchableOpacity
           style={[styles.loginBtn, (!email || !password) && { opacity: 0.5 }]}
-          onPress={handleLogin}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            handleLogin();
+          }}
+          activeOpacity={0.7}
         >
           <Text style={styles.loginText}>Login</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleRegister}>
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            handleRegister();
+          }}
+          activeOpacity={0.7}
+        >
           <Text style={styles.registerText}>
             Don't have an account?{" "}
             <Text style={styles.registerBold}>Register</Text>

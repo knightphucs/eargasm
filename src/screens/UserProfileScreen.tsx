@@ -13,6 +13,7 @@ import {
   ScrollView,
   Dimensions,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -122,13 +123,24 @@ export default function UserProfileScreen() {
           {/* Header & Back Button */}
           <View style={styles.header}>
             <TouchableOpacity
-              onPress={() => navigation.goBack()}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.goBack();
+              }}
               style={styles.backButton}
+              activeOpacity={0.7}
             >
               <Ionicons name="chevron-back" size={28} color="white" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Edit Profile</Text>
-            <TouchableOpacity onPress={toggleTheme} style={styles.themeButton}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                toggleTheme();
+              }}
+              style={styles.themeButton}
+              activeOpacity={0.7}
+            >
               <Ionicons
                 name={isDark ? "sunny-outline" : "moon-outline"}
                 size={24}
@@ -150,7 +162,11 @@ export default function UserProfileScreen() {
               {/* Camera Icon Badge */}
               <TouchableOpacity
                 style={styles.editBadge}
-                onPress={handlePickAvatar}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  handlePickAvatar();
+                }}
+                activeOpacity={0.7}
               >
                 <Ionicons name="camera" size={20} color="black" />
               </TouchableOpacity>
@@ -228,9 +244,12 @@ export default function UserProfileScreen() {
 
             {/* Save Button */}
             <TouchableOpacity
-              onPress={handleSave}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                handleSave();
+              }}
               disabled={saving}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
               <LinearGradient
                 colors={["#1DB954", "#1aa34a"]}
@@ -247,7 +266,14 @@ export default function UserProfileScreen() {
             </TouchableOpacity>
 
             {/* Logout Button */}
-            <TouchableOpacity onPress={logout} style={styles.logoutButton}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                logout();
+              }}
+              style={styles.logoutButton}
+              activeOpacity={0.7}
+            >
               <Text style={styles.logoutText}>Log Out</Text>
             </TouchableOpacity>
           </View>

@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMusic } from "../context/MusicContext";
@@ -192,7 +193,11 @@ export default function StatsScreen() {
           {(["week", "month", "all-time"] as const).map((range) => (
             <TouchableOpacity
               key={range}
-              onPress={() => setTimeRange(range)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setTimeRange(range);
+              }}
+              activeOpacity={0.7}
               style={[
                 styles.timeButton,
                 timeRange === range && styles.timeButtonActive,
