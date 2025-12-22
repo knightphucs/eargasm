@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useMusic } from "../context/MusicContext";
+import { QueueModal } from "./QueueModal";
+import { Image as ExpoImage } from "expo-image";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -28,6 +30,9 @@ export default function MiniPlayer() {
     position,
     duration,
   } = useMusic();
+
+  const [queueVisible, setQueueVisible] = useState(false);
+  const [queue, setQueue] = useState<any[]>([]);
 
   const progress = duration > 0 ? Math.min(position / duration, 1) : 0;
 
@@ -175,74 +180,109 @@ export default function MiniPlayer() {
   if (!currentTrack) return null;
 
   return (
-    <Animated.View
-      {...panResponder.panHandlers}
-      style={[
-        styles.container,
-        {
-          opacity: opacity,
-          transform: [
-            { translateY: entranceAnim },
-            { translateX: pan.x },
-            { translateY: pan.y },
-            { scale: animatedScale },
-          ],
-        },
-      ]}
-    >
-      <View style={styles.progressContainer}>
-        <View style={styles.progressBackground}>
-          <View
-            style={[styles.progressFill, { width: `${progress * 100}%` }]}
-          />
-        </View>
-      </View>
-
-      <View style={styles.content}>
-        <Image
-          source={{
-            uri:
-              currentTrack.album?.images[0]?.url ||
-              "https://via.placeholder.com/50",
-          }}
-          style={styles.img}
-        />
-
-        <View style={styles.info}>
-          <Text style={styles.title} numberOfLines={1}>
-            {currentTrack.name}
-          </Text>
-          <Text style={styles.artist} numberOfLines={1}>
-            {currentTrack.artists[0]?.name}
-          </Text>
-        </View>
-
-        <View style={styles.controls}>
-          <TouchableOpacity onPress={playPrevious} style={styles.controlBtn}>
-            <Ionicons name="play-skip-back" size={24} color="white" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => playTrack(currentTrack)}
-            style={styles.playBtn}
-          >
-            <Ionicons
-              name={isPlaying ? "pause-circle" : "play-circle"}
-              size={40}
-              color="white"
+    <>
+      <Animated.View
+        {...panResponder.panHandlers}
+        style={[
+          styles.container,
+          {
+            opacity: opacity,
+            transform: [
+              { translateY: entranceAnim },
+              { translateX: pan.x },
+              { translateY: pan.y },
+              { scale: animatedScale },
+            ],
+          },
+        ]}
+      >
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBackground}>
+            <View
+              style={[styles.progressFill, { width: `${progress * 100}%` }]}
             />
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={playNext} style={styles.controlBtn}>
-            <Ionicons name="play-skip-forward" size={24} color="white" />
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={closePlayer} style={styles.closeBtn}>
-            <Ionicons name="close" size={20} color="#bbb" />
-          </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </Animated.View>
+
+        <View style={styles.content}>
+          <ExpoImage
+            source={{
+              uri:
+                currentTrack.album?.images[0]?.url ||
+                "https://via.placeholder.com/50",
+            }}
+            style={styles.img}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+
+          <View style={styles.info}>
+            <Text style={styles.title} numberOfLines={1}>
+              {currentTrack.name}
+            </Text>
+            <Text style={styles.artist} numberOfLines={1}>
+              {currentTrack.artists[0]?.name}
+            </Text>
+          </View>
+
+          <View style={styles.controls}>
+            <TouchableOpacity
+              onPress={playPrevious}
+              style={styles.controlBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="play-skip-back" size={24} color="white" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => playTrack(currentTrack)}
+              style={styles.playBtn}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isPlaying ? "pause-circle" : "play-circle"}
+                size={40}
+                color="white"
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={playNext}
+              style={styles.controlBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="play-skip-forward" size={24} color="white" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setQueueVisible(true)}
+              style={styles.controlBtn}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="list" size={20} color="white" />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={closePlayer} style={styles.closeBtn}>
+              <Ionicons name="close" size={20} color="#bbb" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
+
+      <QueueModal
+        visible={queueVisible}
+        queue={queue}
+        currentTrackId={currentTrack?.id}
+        onClose={() => setQueueVisible(false)}
+        onTrackSelect={(track) => {
+          playTrack(track);
+          setQueueVisible(false);
+        }}
+        onRemoveTrack={(trackId) => {
+          setQueue(queue.filter((t) => t.id !== trackId));
+        }}
+      />
+    </>
   );
 }
 

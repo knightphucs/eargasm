@@ -1,8 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
-  Image,
   StyleSheet,
   TouchableOpacity,
   Animated,
@@ -10,8 +9,10 @@ import {
   PanResponder,
   StatusBar,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useMusic } from "../context/MusicContext";
+import { QueueModal } from "./QueueModal";
 import Slider from "@react-native-community/slider";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -30,6 +31,9 @@ export default function FullPlayer() {
     duration,
     seekTo,
   } = useMusic();
+
+  const [queueVisible, setQueueVisible] = useState(false);
+  const [queue, setQueue] = useState<any[]>([]);
 
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -72,8 +76,8 @@ export default function FullPlayer() {
         } else {
           Animated.spring(translateY, {
             toValue: 0,
-            friction: 6,
-            tension: 50,
+            friction: 7,
+            tension: 60,
             useNativeDriver: true,
           }).start();
         }
@@ -94,8 +98,8 @@ export default function FullPlayer() {
   useEffect(() => {
     Animated.spring(translateY, {
       toValue: 0,
-      friction: 7,
-      tension: 40,
+      friction: 8,
+      tension: 65,
       useNativeDriver: true,
     }).start();
   }, []);
@@ -103,99 +107,119 @@ export default function FullPlayer() {
   if (!currentTrack) return null;
 
   return (
-    <Animated.View
-      // 👉 THAY ĐỔI QUAN TRỌNG: Gắn panHandlers vào view tổng ngoài cùng
-      {...panResponder.panHandlers}
-      style={[styles.container, { transform: [{ translateY }] }]}
-    >
-      <StatusBar barStyle="light-content" />
+    <>
+      <Animated.View
+        // 👉 THAY ĐỔI QUAN TRỌNG: Gắn panHandlers vào view tổng ngoài cùng
+        {...panResponder.panHandlers}
+        style={[styles.container, { transform: [{ translateY }] }]}
+      >
+        <StatusBar barStyle="light-content" />
 
-      {/* Header */}
-      <View style={styles.headerContainer}>
-        <View style={styles.dragHandleContainer}>
-          <View style={styles.dragHandle} />
-        </View>
-
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={closeAnim}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="chevron-down" size={28} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>NOW PLAYING</Text>
-          <View style={{ width: 28 }} />
-        </View>
-      </View>
-
-      {/* Content */}
-      <View style={styles.contentContainer}>
-        {/* Artwork */}
-        <View style={styles.artworkContainer}>
-          <Image
-            source={{
-              uri:
-                currentTrack.album?.images[0]?.url ||
-                "https://via.placeholder.com/300",
-            }}
-            style={styles.cover}
-          />
-        </View>
-
-        {/* Info */}
-        <View style={styles.trackInfo}>
-          <Text style={styles.title} numberOfLines={1}>
-            {currentTrack.name}
-          </Text>
-          <Text style={styles.artist} numberOfLines={1}>
-            {currentTrack.artists.map((a: any) => a.name).join(", ")}
-          </Text>
-        </View>
-
-        {/* Progress: Slider cần nằm trong View không bị chặn bởi PanResponder ngang */}
-        <View style={styles.progressContainer}>
-          <Slider
-            style={{ width: "100%", height: 40 }}
-            minimumValue={0}
-            maximumValue={duration}
-            value={position}
-            minimumTrackTintColor="#1DB954"
-            maximumTrackTintColor="#555"
-            thumbTintColor="#1DB954"
-            onSlidingComplete={seekTo}
-            // fix lỗi slider trên Android đôi khi bị giật khi nằm trong PanResponder
-            onSlidingStart={() => {}}
-          />
-
-          <View style={styles.timeRow}>
-            <Text style={styles.timeText}>{formatTime(position)}</Text>
-            <Text style={styles.timeText}>{formatTime(duration)}</Text>
+        {/* Header */}
+        <View style={styles.headerContainer}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              onPress={closeAnim}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="chevron-down" size={28} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>NOW PLAYING</Text>
+            <TouchableOpacity
+              onPress={() => setQueueVisible(true)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="list" size={28} color="white" />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Controls */}
-        <View style={styles.controls}>
-          <TouchableOpacity onPress={playPrevious}>
-            <Ionicons name="play-skip-back" size={35} color="white" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => playTrack(currentTrack)}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name={isPlaying ? "pause-circle" : "play-circle"}
-              size={80}
-              color="white"
+        {/* Content */}
+        <View style={styles.contentContainer}>
+          {/* Artwork */}
+          <View style={styles.artworkContainer}>
+            <Image
+              source={{
+                uri:
+                  currentTrack.album?.images[0]?.url ||
+                  "https://via.placeholder.com/300",
+              }}
+              style={styles.cover}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={300}
             />
-          </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity onPress={playNext}>
-            <Ionicons name="play-skip-forward" size={35} color="white" />
-          </TouchableOpacity>
+          {/* Info */}
+          <View style={styles.trackInfo}>
+            <Text style={styles.title} numberOfLines={1}>
+              {currentTrack.name}
+            </Text>
+            <Text style={styles.artist} numberOfLines={1}>
+              {currentTrack.artists.map((a: any) => a.name).join(", ")}
+            </Text>
+          </View>
+
+          {/* Progress: Slider cần nằm trong View không bị chặn bởi PanResponder ngang */}
+          <View style={styles.progressContainer}>
+            <Slider
+              style={{ width: "100%", height: 40 }}
+              minimumValue={0}
+              maximumValue={duration}
+              value={position}
+              minimumTrackTintColor="#1DB954"
+              maximumTrackTintColor="#555"
+              thumbTintColor="#1DB954"
+              onSlidingComplete={seekTo}
+              // fix lỗi slider trên Android đôi khi bị giật khi nằm trong PanResponder
+              onSlidingStart={() => {}}
+            />
+
+            <View style={styles.timeRow}>
+              <Text style={styles.timeText}>{formatTime(position)}</Text>
+              <Text style={styles.timeText}>{formatTime(duration)}</Text>
+            </View>
+          </View>
+
+          {/* Controls */}
+          <View style={styles.controls}>
+            <TouchableOpacity onPress={playPrevious} activeOpacity={0.7}>
+              <Ionicons name="play-skip-back" size={35} color="white" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => playTrack(currentTrack)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={isPlaying ? "pause-circle" : "play-circle"}
+                size={80}
+                color="white"
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={playNext} activeOpacity={0.7}>
+              <Ionicons name="play-skip-forward" size={35} color="white" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </Animated.View>
+      </Animated.View>
+
+      <QueueModal
+        visible={queueVisible}
+        queue={queue}
+        currentTrackId={currentTrack?.id}
+        onClose={() => setQueueVisible(false)}
+        onTrackSelect={(track) => {
+          playTrack(track);
+          setQueueVisible(false);
+        }}
+        onRemoveTrack={(trackId) => {
+          setQueue(queue.filter((t) => t.id !== trackId));
+        }}
+      />
+    </>
   );
 }
 
@@ -210,19 +234,9 @@ const styles = StyleSheet.create({
     zIndex: 99999,
   },
   headerContainer: {
-    paddingTop: 40, // Safe Area Top
+    paddingTop: 40,
     paddingBottom: 10,
     backgroundColor: "transparent",
-  },
-  dragHandleContainer: {
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  dragHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.3)",
   },
   header: {
     flexDirection: "row",

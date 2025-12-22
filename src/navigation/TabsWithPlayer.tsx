@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import HomeScreen from "../screens/HomeScreen";
 import SearchScreen from "../screens/SearchScreen";
 import LibraryScreen from "../screens/LibraryScreen";
+import StatsScreen from "../screens/StatsScreen";
 import MiniPlayer from "../components/MiniPlayer";
 import FullPlayer from "../components/FullPlayer";
 import { useMusic } from "../context/MusicContext";
@@ -36,6 +37,8 @@ export default function TabsWithPlayer() {
               iconName = focused ? "search" : "search-outline";
             } else if (route.name === "Library") {
               iconName = focused ? "library" : "library-outline";
+            } else if (route.name === "Stats") {
+              iconName = focused ? "stats-chart" : "stats-chart-outline";
             }
 
             return <Ionicons name={iconName} size={size} color={color} />;
@@ -45,6 +48,7 @@ export default function TabsWithPlayer() {
         <Tab.Screen name="Home" component={HomeScreen} />
         <Tab.Screen name="Search" component={SearchScreen} />
         <Tab.Screen name="Library" component={LibraryScreen} />
+        <Tab.Screen name="Stats" component={StatsScreen} />
       </Tab.Navigator>
 
       <MiniPlayer />

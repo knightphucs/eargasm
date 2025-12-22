@@ -38,7 +38,7 @@ export const uploadAvatarToCloudinary = async (uri: string) => {
     // 4. Trả về URL ảnh (dùng secure_url để lấy https)
     return data.secure_url;
   } catch (error) {
-    console.error("Cloudinary Upload Error:", error);
+    if (__DEV__) console.error("Cloudinary Upload Error:", error);
     throw error;
   }
 };

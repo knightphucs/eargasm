@@ -4,8 +4,11 @@ import React, {
   useContext,
   ReactNode,
   useRef,
+  useCallback,
 } from "react";
 import { Audio } from "expo-av";
+import { db, auth } from "../config/firebaseConfig";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
 
 interface MusicContextType {
   isPlaying: boolean;
@@ -28,6 +31,7 @@ const MusicContext = createContext<MusicContextType | undefined>(undefined);
 
 export const MusicProvider = ({ children }: { children: ReactNode }) => {
   const soundRef = useRef<Audio.Sound | null>(null);
+  const playStartTimeRef = useRef<number | null>(null);
 
   const seekTo = async (value: number) => {
     if (!soundRef.current) return;
@@ -46,6 +50,34 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
 
   const [queue, setQueue] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
+
+  // Save listening history to Firestore
+  const saveListeningHistory = useCallback(async (track: any) => {
+    try {
+      const user = auth.currentUser;
+      if (!user || !playStartTimeRef.current) return;
+
+      const playDuration = Date.now() - playStartTimeRef.current;
+
+      // Only save if played for at least 3 seconds
+      if (playDuration < 3000) return;
+
+      const historyRef = collection(db, "users", user.uid, "listening_history");
+
+      await addDoc(historyRef, {
+        track: {
+          id: track.id,
+          name: track.name,
+          artists: track.artists,
+          album: track.album,
+        },
+        duration: playDuration,
+        playedAt: Timestamp.now(),
+      });
+    } catch (error) {
+      if (__DEV__) console.error("Failed to save listening history:", error);
+    }
+  }, []);
 
   const playNext = async () => {
     if (queue.length === 0) return;
@@ -67,6 +99,11 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
 
     try {
+      // Save previous track history before switching
+      if (currentTrack && currentTrack.id !== track.id) {
+        await saveListeningHistory(currentTrack);
+      }
+
       // Nếu truyền danh sách bài → set queue
       if (list) {
         setQueue(list);
@@ -93,6 +130,7 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
 
       setCurrentTrack(track);
       setIsPlaying(true);
+      playStartTimeRef.current = Date.now();
 
       const { sound } = await Audio.Sound.createAsync(
         { uri: previewUrl },
@@ -111,7 +149,7 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
         }
       });
     } catch (e) {
-      console.error(e);
+      if (__DEV__) console.error(e);
     }
   };
 
@@ -135,6 +173,12 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       await soundRef.current.unloadAsync();
       soundRef.current = null;
     }
+
+    // Save history before closing
+    if (currentTrack) {
+      await saveListeningHistory(currentTrack);
+    }
+
     setCurrentTrack(null);
     setIsPlaying(false);
   };

@@ -19,7 +19,10 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppStyles as styles } from "../styles/AppStyles";
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
@@ -39,7 +42,7 @@ export default function LibraryScreen() {
   // State
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   // Create Playlist State
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -56,7 +59,7 @@ export default function LibraryScreen() {
 
   const toggleViewMode = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setViewMode((prev) => (prev === 'grid' ? 'list' : 'grid'));
+    setViewMode((prev) => (prev === "grid" ? "list" : "grid"));
   };
 
   const fetchPlaylists = async () => {
@@ -73,9 +76,12 @@ export default function LibraryScreen() {
               const docSnap = await getDoc(docRef);
               if (docSnap.exists()) {
                 const firebaseData = docSnap.data();
-                return { 
-                    ...p, 
-                    tracks: { ...p.tracks, total: firebaseData.trackCount ?? p.tracks.total } 
+                return {
+                  ...p,
+                  tracks: {
+                    ...p.tracks,
+                    total: firebaseData.trackCount ?? p.tracks.total,
+                  },
                 };
               }
             } catch (e) {}
@@ -85,7 +91,7 @@ export default function LibraryScreen() {
         setPlaylists(mergedPlaylists);
       }
     } catch (error) {
-      console.error(error);
+      if (__DEV__) console.error(error);
     } finally {
       setLoading(false);
     }
@@ -100,12 +106,12 @@ export default function LibraryScreen() {
     try {
       const token = await getSavedToken();
       if (!token) return;
-      
+
       const user = await getUserProfile(token);
-      
+
       // 1. Tạo trên Spotify
       const newPl = await createPlaylist(token, user.id, newPlaylistName);
-      
+
       // 2. Lưu vào Firestore để quản lý thêm
       if (auth.currentUser) {
         await setDoc(doc(db, "playlists", newPl.id), {
@@ -116,7 +122,7 @@ export default function LibraryScreen() {
           trackCount: 0,
         });
       }
-      
+
       setCreateModalVisible(false);
       setNewPlaylistName("");
       fetchPlaylists();
@@ -130,10 +136,10 @@ export default function LibraryScreen() {
 
   // Hàm chuyển màn hình
   const openPlaylistDetail = (playlist: any, index: number) => {
-    navigation.navigate("PlaylistDetail", { 
+    navigation.navigate("PlaylistDetail", {
       playlist: playlist,
       playlistIndex: index, // Vị trí hiện tại
-      allPlaylists: playlists // Danh sách tất cả playlist để vuốt qua lại
+      allPlaylists: playlists, // Danh sách tất cả playlist để vuốt qua lại
     });
   };
 
@@ -143,9 +149,13 @@ export default function LibraryScreen() {
         {/* Header */}
         <View style={styles.headerRow}>
           <Text style={styles.title}>Thư viện</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
             <TouchableOpacity onPress={toggleViewMode} style={styles.iconBtn}>
-              <Ionicons name={viewMode === 'grid' ? "list" : "grid"} size={24} color="#1DB954" />
+              <Ionicons
+                name={viewMode === "grid" ? "list" : "grid"}
+                size={24}
+                color="#1DB954"
+              />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setCreateModalVisible(true)}
@@ -158,39 +168,60 @@ export default function LibraryScreen() {
 
         {/* Playlist List */}
         {loading ? (
-          <ActivityIndicator size="large" color="#1DB954" style={{ marginTop: 50 }} />
+          <ActivityIndicator
+            size="large"
+            color="#1DB954"
+            style={{ marginTop: 50 }}
+          />
         ) : (
           <FlatList
             key={viewMode} // Key thay đổi để buộc render lại khi đổi view
             data={playlists}
             keyExtractor={(item) => item.id}
-            numColumns={viewMode === 'grid' ? 2 : 1}
-            columnWrapperStyle={viewMode === 'grid' ? { justifyContent: "space-between" } : undefined}
+            numColumns={viewMode === "grid" ? 2 : 1}
+            columnWrapperStyle={
+              viewMode === "grid"
+                ? { justifyContent: "space-between" }
+                : undefined
+            }
             contentContainerStyle={{ paddingBottom: 150 }}
             refreshing={loading}
             onRefresh={fetchPlaylists}
             ListEmptyComponent={
-                <Text style={{color:'#777', textAlign:'center', marginTop: 50}}>Chưa có playlist nào.</Text>
+              <Text
+                style={{ color: "#777", textAlign: "center", marginTop: 50 }}
+              >
+                Chưa có playlist nào.
+              </Text>
             }
             renderItem={({ item, index }) => (
               <TouchableOpacity
-                style={viewMode === 'grid' ? styles.gridItem : styles.listItem}
+                style={viewMode === "grid" ? styles.gridItem : styles.listItem}
                 //Truyền index vào hàm
-                onPress={() => openPlaylistDetail(item, index)} 
+                onPress={() => openPlaylistDetail(item, index)}
               >
                 <Image
                   source={{
-                    uri: item.images?.[0]?.url || "https://via.placeholder.com/150",
+                    uri:
+                      item.images?.[0]?.url ||
+                      "https://via.placeholder.com/150",
                   }}
-                  style={viewMode === 'grid' ? styles.gridImg : styles.listImg}
+                  style={viewMode === "grid" ? styles.gridImg : styles.listImg}
                 />
-                <View style={viewMode === 'list' ? styles.listInfo : {}}>
-                  <Text style={styles.name} numberOfLines={viewMode === 'grid' ? 2 : 1}>
+                <View style={viewMode === "list" ? styles.listInfo : {}}>
+                  <Text
+                    style={styles.name}
+                    numberOfLines={viewMode === "grid" ? 2 : 1}
+                  >
                     {item.name}
                   </Text>
-                  <Text style={styles.count}>{item.tracks?.total || 0} bài hát</Text>
+                  <Text style={styles.count}>
+                    {item.tracks?.total || 0} bài hát
+                  </Text>
                 </View>
-                {viewMode === 'list' && <Ionicons name="chevron-forward" size={20} color="#666" />}
+                {viewMode === "list" && (
+                  <Ionicons name="chevron-forward" size={20} color="#666" />
+                )}
               </TouchableOpacity>
             )}
           />
@@ -226,7 +257,9 @@ export default function LibraryScreen() {
                   onPress={handleCreate}
                   disabled={creating}
                 >
-                  <Text style={styles.btnText}>{creating ? "Đang tạo..." : "Tạo"}</Text>
+                  <Text style={styles.btnText}>
+                    {creating ? "Đang tạo..." : "Tạo"}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>

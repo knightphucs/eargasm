@@ -52,8 +52,6 @@ function TabNavigator() {
 }
 
 const RootNavigation = () => {
-  const { isExpanded } = useMusic();
-
   return (
     <NavigationContainer>
       <Stack.Navigator
@@ -83,10 +81,15 @@ const RootNavigation = () => {
       <MiniPlayer />
 
       {/* Conditionally Render FullPlayer */}
-      {isExpanded && <FullPlayer />}
+      <FullPlayerWrapper />
     </NavigationContainer>
   );
 };
+
+function FullPlayerWrapper() {
+  const { isExpanded } = useMusic();
+  return isExpanded ? <FullPlayer /> : null;
+}
 
 export default function AppNavigator() {
   return (

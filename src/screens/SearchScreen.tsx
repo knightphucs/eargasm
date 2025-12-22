@@ -29,6 +29,7 @@ import { db, auth } from "../config/firebaseConfig";
 import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 
 import { useMusic } from "../context/MusicContext";
+import { NowPlayingIndicator } from "../components/NowPlayingIndicator";
 
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
@@ -79,7 +80,7 @@ export default function SearchScreen() {
           const snapshot = await getDocs(tracksRef);
           snapshot.forEach((doc) => allTrackIds.add(doc.id));
         } catch (e) {
-          console.log(e);
+          // Ignore errors loading individual playlist tracks
         }
       })
     );
@@ -107,7 +108,7 @@ export default function SearchScreen() {
       setTracks(data.tracks?.items || []);
       setArtists(data.artists?.items || []);
     } catch (error) {
-      console.error(error);
+      if (__DEV__) console.error(error);
     } finally {
       setLoading(false);
     }
@@ -332,11 +333,12 @@ export default function SearchScreen() {
                       {item.artists[0].name}
                     </Text>
                   </View>
-                  <Ionicons
-                    name={isTrackPlaying ? "pause" : "play"}
-                    size={20}
-                    color={isTrackPlaying ? "#1DB954" : "#444"}
-                  />
+                  {isTrackPlaying && (
+                    <NowPlayingIndicator isPlaying={isPlaying} />
+                  )}
+                  {!isTrackPlaying && (
+                    <Ionicons name="play" size={20} color="#444" />
+                  )}
                 </TouchableOpacity>
               </Swipeable>
             );

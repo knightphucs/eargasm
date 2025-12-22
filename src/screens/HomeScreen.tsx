@@ -144,10 +144,11 @@ const AutoScrollingBanner = ({ data, onPlay }: BannerProps) => {
 };
 
 // --- COMPONENT: HORIZONTAL CIRCLE LIST ---
-const CircleArtistItem = ({ item, onPress }: CircleArtistProps) => (
+const CircleArtistItem = React.memo(({ item, onPress }: CircleArtistProps) => (
   <TouchableOpacity
     style={{ alignItems: "center", marginRight: 20 }}
     onPress={onPress}
+    activeOpacity={0.7}
   >
     <Image
       source={{ uri: item.album?.images?.[0]?.url }}
@@ -158,6 +159,7 @@ const CircleArtistItem = ({ item, onPress }: CircleArtistProps) => (
         borderWidth: 2,
         borderColor: "#1DB954",
       }}
+      cachePolicy="memory-disk"
     />
     <Text
       style={{
@@ -172,7 +174,7 @@ const CircleArtistItem = ({ item, onPress }: CircleArtistProps) => (
       {item.artists[0].name}
     </Text>
   </TouchableOpacity>
-);
+));
 
 // --- MAIN SCREEN ---
 export default function HomeScreen() {
@@ -192,6 +194,10 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
 
   const trendingScrollX = useRef(0);
+  const trendingRef = useRef<FlatList>(null);
+  const isUserInteracting = useRef(false);
+  const autoScrollTimer = useRef<NodeJS.Timeout | null>(null);
+  const currentOffset = useRef(0);
 
   const getGreeting = () => {
     const hours = new Date().getHours();
@@ -223,33 +229,18 @@ export default function HomeScreen() {
       const data = await getUserTopTracks(token);
       setTracks(data.items || []);
     } catch (e) {
-      console.error(e);
+      if (__DEV__) console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
-  if (!token)
-    return (
-      <View style={styles.centerContainer}>
-        <TouchableOpacity style={styles.loginBtn} onPress={connectSpotify}>
-          <Text style={styles.btnText}>Login Spotify</Text>
-        </TouchableOpacity>
-      </View>
-    );
-
   const bannerData = tracks.slice(0, 5);
   const artistData = tracks.slice(5, 12);
   const listData = tracks.slice(0, 8);
 
-  const trendingRef = useRef<FlatList>(null);
-  const isUserInteracting = useRef(false);
-  const autoScrollTimer = useRef<NodeJS.Timeout | null>(null);
-
   const CARD_WIDTH = 155; // 140 + margin
   const loopingData = [...listData, ...listData];
-
-  const currentOffset = useRef(0);
 
   const onTrendingScroll = (e: any) => {
     const offsetX = e.nativeEvent.contentOffset.x;
@@ -304,6 +295,16 @@ export default function HomeScreen() {
 
     return () => stopAutoScroll();
   }, [listData]);
+
+  if (!token) {
+    return (
+      <View style={styles.centerContainer}>
+        <TouchableOpacity style={styles.loginBtn} onPress={connectSpotify}>
+          <Text style={styles.btnText}>Login Spotify</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -364,6 +365,10 @@ export default function HomeScreen() {
             )}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingLeft: 20 }}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={5}
+            windowSize={5}
+            initialNumToRender={5}
           />
         </View>
 
@@ -381,10 +386,13 @@ export default function HomeScreen() {
               <TouchableOpacity
                 style={styles.cardItem}
                 onPress={() => playTrack(item, tracks)}
+                activeOpacity={0.8}
               >
                 <Image
                   source={{ uri: item.album?.images?.[0]?.url }}
                   style={styles.cardImage}
+                  cachePolicy="memory-disk"
+                  transition={200}
                 />
                 <Text style={styles.cardTitle} numberOfLines={1}>
                   {item.name}
@@ -395,6 +403,10 @@ export default function HomeScreen() {
             onScroll={onTrendingScroll}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={3}
+            windowSize={3}
+            initialNumToRender={3}
           />
         </View>
 
