@@ -12,6 +12,7 @@ import {
   StatusBar,
   ViewToken,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,6 +23,10 @@ import { useMusic } from "../context/MusicContext";
 import { useSpotifyAuth } from "../context/SpotifyAuthContext";
 import { useUser } from "../context/UserContext";
 import { getUserTopTracks } from "../services/spotifyService";
+import {
+  SkeletonAlbumCard,
+  SkeletonTrackItem,
+} from "../components/SkeletonLoader";
 
 const { width } = Dimensions.get("window");
 const BANNER_WIDTH = width;
@@ -84,8 +89,14 @@ const AutoScrollingBanner = ({ data, onPlay }: BannerProps) => {
 
   const renderBannerItem = ({ item }: { item: Track }) => (
     <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={() => onPlay(item)}
+      activeOpacity={0.7}
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPlay(item);
+        setTimeout(() => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }, 150);
+      }}
       style={{ width: BANNER_WIDTH, height: BANNER_HEIGHT }}
     >
       <Image
@@ -144,10 +155,11 @@ const AutoScrollingBanner = ({ data, onPlay }: BannerProps) => {
 };
 
 // --- COMPONENT: HORIZONTAL CIRCLE LIST ---
-const CircleArtistItem = ({ item, onPress }: CircleArtistProps) => (
+const CircleArtistItem = React.memo(({ item, onPress }: CircleArtistProps) => (
   <TouchableOpacity
     style={{ alignItems: "center", marginRight: 20 }}
     onPress={onPress}
+    activeOpacity={0.7}
   >
     <Image
       source={{ uri: item.album?.images?.[0]?.url }}
@@ -158,6 +170,7 @@ const CircleArtistItem = ({ item, onPress }: CircleArtistProps) => (
         borderWidth: 2,
         borderColor: "#1DB954",
       }}
+      cachePolicy="memory-disk"
     />
     <Text
       style={{
@@ -172,7 +185,7 @@ const CircleArtistItem = ({ item, onPress }: CircleArtistProps) => (
       {item.artists[0].name}
     </Text>
   </TouchableOpacity>
-);
+));
 
 // --- MAIN SCREEN ---
 export default function HomeScreen() {
@@ -192,6 +205,10 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
 
   const trendingScrollX = useRef(0);
+  const trendingRef = useRef<FlatList>(null);
+  const isUserInteracting = useRef(false);
+  const autoScrollTimer = useRef<NodeJS.Timeout | null>(null);
+  const currentOffset = useRef(0);
 
   const getGreeting = () => {
     const hours = new Date().getHours();
@@ -223,33 +240,18 @@ export default function HomeScreen() {
       const data = await getUserTopTracks(token);
       setTracks(data.items || []);
     } catch (e) {
-      console.error(e);
+      if (__DEV__) console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
-  if (!token)
-    return (
-      <View style={styles.centerContainer}>
-        <TouchableOpacity style={styles.loginBtn} onPress={connectSpotify}>
-          <Text style={styles.btnText}>Login Spotify</Text>
-        </TouchableOpacity>
-      </View>
-    );
-
   const bannerData = tracks.slice(0, 5);
   const artistData = tracks.slice(5, 12);
   const listData = tracks.slice(0, 8);
 
-  const trendingRef = useRef<FlatList>(null);
-  const isUserInteracting = useRef(false);
-  const autoScrollTimer = useRef<NodeJS.Timeout | null>(null);
-
   const CARD_WIDTH = 155; // 140 + margin
   const loopingData = [...listData, ...listData];
-
-  const currentOffset = useRef(0);
 
   const onTrendingScroll = (e: any) => {
     const offsetX = e.nativeEvent.contentOffset.x;
@@ -305,6 +307,16 @@ export default function HomeScreen() {
     return () => stopAutoScroll();
   }, [listData]);
 
+  if (!token) {
+    return (
+      <View style={styles.centerContainer}>
+        <TouchableOpacity style={styles.loginBtn} onPress={connectSpotify}>
+          <Text style={styles.btnText}>Login Spotify</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Fix: StatusBar props correct */}
@@ -320,8 +332,16 @@ export default function HomeScreen() {
       >
         {/* 1. AUTO SCROLLING HEADER */}
         {loading ? (
-          <View style={{ height: 280, justifyContent: "center" }}>
-            <ActivityIndicator color="#1DB954" />
+          <View
+            style={{
+              height: 280,
+              justifyContent: "center",
+              backgroundColor: "#1E1E1E",
+            }}
+          >
+            <View style={{ paddingHorizontal: 20 }}>
+              <SkeletonAlbumCard />
+            </View>
           </View>
         ) : (
           <AutoScrollingBanner
@@ -359,43 +379,81 @@ export default function HomeScreen() {
             renderItem={({ item }) => (
               <CircleArtistItem
                 item={item}
-                onPress={() => playTrack(item, tracks)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  playTrack(item, tracks);
+                  setTimeout(() => {
+                    Haptics.notificationAsync(
+                      Haptics.NotificationFeedbackType.Success
+                    );
+                  }, 150);
+                }}
               />
             )}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingLeft: 20 }}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={5}
+            windowSize={5}
+            initialNumToRender={5}
           />
         </View>
 
         {/* 3. TRENDING / RECENT (Cards) */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>Trending Now</Text>
-          <FlatList
-            ref={trendingRef}
-            horizontal
-            data={listData}
-            keyExtractor={(item) => `trend-${item.id}`}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingLeft: 20 }}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.cardItem}
-                onPress={() => playTrack(item, tracks)}
-              >
-                <Image
-                  source={{ uri: item.album?.images?.[0]?.url }}
-                  style={styles.cardImage}
-                />
-                <Text style={styles.cardTitle} numberOfLines={1}>
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
-            )}
-            scrollEventThrottle={16}
-            onScroll={onTrendingScroll}
-            onTouchStart={onTouchStart}
-            onTouchEnd={onTouchEnd}
-          />
+          {loading ? (
+            <FlatList
+              horizontal
+              data={[1, 2, 3]}
+              keyExtractor={(item) => `skeleton-${item}`}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingLeft: 20 }}
+              renderItem={() => <SkeletonAlbumCard />}
+            />
+          ) : (
+            <FlatList
+              ref={trendingRef}
+              horizontal
+              data={listData}
+              keyExtractor={(item) => `trend-${item.id}`}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingLeft: 20 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.cardItem}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    playTrack(item, tracks);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Image
+                    source={{ uri: item.album?.images?.[0]?.url }}
+                    style={styles.cardImage}
+                    cachePolicy="memory-disk"
+                    transition={200}
+                  />
+                  <Text style={styles.cardTitle} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              scrollEventThrottle={16}
+              onScroll={onTrendingScroll}
+              onTouchStart={onTouchStart}
+              onTouchEnd={onTouchEnd}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={3}
+              windowSize={3}
+              initialNumToRender={3}
+              getItemLayout={(data, index) => ({
+                length: 140,
+                offset: 140 * index,
+                index,
+              })}
+            />
+          )}
         </View>
 
         {/* 4. VERTICAL LIST */}
@@ -420,7 +478,11 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={`list-${item.id}-${index}`}
                 style={styles.rowItem}
-                onPress={() => playTrack(item, tracks)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  playTrack(item, tracks);
+                }}
+                activeOpacity={0.7}
               >
                 <Text style={styles.indexText}>{index + 1}</Text>
                 <Image

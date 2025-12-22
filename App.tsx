@@ -6,6 +6,7 @@ import LoginScreen from "./src/screens/LoginScreen";
 import AppNavigator from "./src/navigation/AppNavigator";
 import { SpotifyAuthProvider } from "./src/context/SpotifyAuthContext";
 import { UserProvider, useUser } from "./src/context/UserContext";
+import { ThemeProvider } from "./src/context/ThemeContext";
 
 function Root() {
   const { firebaseUser, loading } = useUser();
@@ -35,11 +36,13 @@ function Root() {
 
 export default function App() {
   return (
-    <UserProvider>
-      <SafeAreaProvider>
-        <StatusBar barStyle="light-content" backgroundColor="#121212" />
-        <Root />
-      </SafeAreaProvider>
-    </UserProvider>
+    <ThemeProvider>
+      <UserProvider>
+        <SafeAreaProvider>
+          <StatusBar barStyle="light-content" backgroundColor="#121212" />
+          <Root />
+        </SafeAreaProvider>
+      </UserProvider>
+    </ThemeProvider>
   );
 }

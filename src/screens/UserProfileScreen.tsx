@@ -13,24 +13,27 @@ import {
   ScrollView,
   Dimensions,
 } from "react-native";
-import { Image } from "expo-image"; 
-import { LinearGradient } from "expo-linear-gradient"; 
-import { Ionicons } from "@expo/vector-icons"; 
+import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useNavigation } from "@react-navigation/native"; 
+import { useNavigation } from "@react-navigation/native";
 
 import { useUser } from "../context/UserContext";
 import { uploadAvatarToCloudinary } from "../services/avatarService";
+import { useTheme } from "../context/ThemeContext";
 
 const { width } = Dimensions.get("window");
 
 export default function UserProfileScreen() {
   const { userProfile, updateUserProfile, logout } = useUser();
+  const { isDark, toggleTheme, colors } = useTheme();
   const navigation = useNavigation();
 
   // State
   const [displayName, setDisplayName] = useState("");
-  const [bio, setBio] = useState('')
+  const [bio, setBio] = useState("");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -50,7 +53,8 @@ export default function UserProfileScreen() {
   if (!userProfile) return null;
 
   const handlePickAvatar = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
       Alert.alert("Cần quyền truy cập", "Bạn cần cấp quyền truy cập ảnh.");
       return;
@@ -80,7 +84,7 @@ export default function UserProfileScreen() {
       await updateUserProfile({
         displayName: displayName,
         avatarUrl: finalAvatarUrl,
-        bio: bio
+        bio: bio,
       });
       setSelectedImage(null);
       Alert.alert("Thành công", "Cập nhật hồ sơ thành công!");
@@ -116,14 +120,33 @@ export default function UserProfileScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          
           {/* Header & Back Button */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.goBack();
+              }}
+              style={styles.backButton}
+              activeOpacity={0.7}
+            >
               <Ionicons name="chevron-back" size={28} color="white" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Edit Profile</Text>
-            <View style={{ width: 28 }} /> 
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                toggleTheme();
+              }}
+              style={styles.themeButton}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isDark ? "sunny-outline" : "moon-outline"}
+                size={24}
+                color="#1DB954"
+              />
+            </TouchableOpacity>
           </View>
 
           {/* Avatar Section */}
@@ -135,9 +158,16 @@ export default function UserProfileScreen() {
                 transition={500}
                 contentFit="cover"
               />
-              
+
               {/* Camera Icon Badge */}
-              <TouchableOpacity style={styles.editBadge} onPress={handlePickAvatar}>
+              <TouchableOpacity
+                style={styles.editBadge}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  handlePickAvatar();
+                }}
+                activeOpacity={0.7}
+              >
                 <Ionicons name="camera" size={20} color="black" />
               </TouchableOpacity>
             </View>
@@ -153,13 +183,19 @@ export default function UserProfileScreen() {
 
           {/* Form Section */}
           <View style={styles.formContainer}>
-            
             {/* Email Field (Read-only) */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>
               <View style={[styles.inputWrapper, styles.readOnlyInput]}>
-                <Ionicons name="mail-outline" size={20} color="#888" style={styles.inputIcon} />
-                <Text style={styles.inputTextReadOnly}>{userProfile.email}</Text>
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color="#888"
+                  style={styles.inputIcon}
+                />
+                <Text style={styles.inputTextReadOnly}>
+                  {userProfile.email}
+                </Text>
                 <Ionicons name="lock-closed-outline" size={16} color="#555" />
               </View>
             </View>
@@ -168,7 +204,12 @@ export default function UserProfileScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Display Name</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={20} color="white" style={styles.inputIcon} />
+                <Ionicons
+                  name="person-outline"
+                  size={20}
+                  color="white"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   value={displayName}
                   onChangeText={setDisplayName}
@@ -184,7 +225,12 @@ export default function UserProfileScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Bio</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="text-outline" size={20} color="white" style={styles.inputIcon} />
+                <Ionicons
+                  name="text-outline"
+                  size={20}
+                  color="white"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   value={bio}
                   onChangeText={setBio}
@@ -198,12 +244,15 @@ export default function UserProfileScreen() {
 
             {/* Save Button */}
             <TouchableOpacity
-              onPress={handleSave}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                handleSave();
+              }}
               disabled={saving}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
               <LinearGradient
-                colors={['#1DB954', '#1aa34a']}
+                colors={["#1DB954", "#1aa34a"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={[styles.saveButton, saving && { opacity: 0.7 }]}
@@ -217,10 +266,16 @@ export default function UserProfileScreen() {
             </TouchableOpacity>
 
             {/* Logout Button */}
-            <TouchableOpacity onPress={logout} style={styles.logoutButton}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                logout();
+              }}
+              style={styles.logoutButton}
+              activeOpacity={0.7}
+            >
               <Text style={styles.logoutText}>Log Out</Text>
             </TouchableOpacity>
-
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -230,7 +285,7 @@ export default function UserProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
-  
+
   // Background Effects
   backgroundLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -247,22 +302,29 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
-    marginTop: Platform.OS === 'ios' ? 60 : 40,
+    marginTop: Platform.OS === "ios" ? 60 : 40,
     marginBottom: 20,
   },
   backButton: {
     padding: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: "rgba(255,255,255,0.1)",
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
+    fontWeight: "bold",
+    color: "white",
+    flex: 1,
+    textAlign: "center",
+  },
+  themeButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: "rgba(29,185,84,0.2)",
   },
 
   // Avatar
@@ -271,7 +333,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   avatarWrapper: {
-    position: 'relative',
+    position: "relative",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
@@ -293,23 +355,23 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 20,
     borderWidth: 3,
-    borderColor: "#121212", 
+    borderColor: "#121212",
   },
   unsavedContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 215, 0, 0.15)",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     marginTop: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255, 215, 0, 0.3)',
+    borderColor: "rgba(255, 215, 0, 0.3)",
   },
   unsavedText: {
-    color: '#FFD700',
+    color: "#FFD700",
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     marginLeft: 6,
   },
 
@@ -348,7 +410,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: "white",
     fontSize: 16,
-    height: '100%',
+    height: "100%",
   },
   inputTextReadOnly: {
     flex: 1,

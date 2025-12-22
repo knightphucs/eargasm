@@ -47,7 +47,7 @@ export const getUserTopTracks = async (token: string) => {
         name: album.name,
         artists: album.artists,
         album: { images: album.images },
-        preview_url: null, // New Releases thường không có preview, sẽ fallback sang nhạc demo
+        preview_url: null,
       })),
     };
   }
@@ -107,7 +107,7 @@ export const saveToken = async (token: string, expiresIn: number) => {
     await AsyncStorage.setItem(TOKEN_KEY, token);
     await AsyncStorage.setItem(EXPIRATION_KEY, expirationTime.toString());
   } catch (e) {
-    console.error("Error saving token", e);
+    if (__DEV__) console.error("Error saving token", e);
   }
 };
 
@@ -137,7 +137,8 @@ export const createPlaylist = async (
   playlistName: string
 ) => {
   try {
-    console.log(`📝 Creating playlist: ${playlistName} for user: ${userId}`);
+    if (__DEV__)
+      console.log(`📝 Creating playlist: ${playlistName} for user: ${userId}`);
 
     const response = await fetch(
       `https://api.spotify.com/v1/users/${userId}/playlists`,
@@ -163,7 +164,7 @@ export const createPlaylist = async (
 
     return json;
   } catch (error) {
-    console.error("❌ Error creating Playlist:", error);
+    if (__DEV__) console.error("❌ Error creating Playlist:", error);
     throw error;
   }
 };

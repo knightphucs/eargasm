@@ -10,6 +10,7 @@ import SearchScreen from "../screens/SearchScreen";
 import UserProfileScreen from "../screens/UserProfileScreen";
 import LibraryScreen from "../screens/LibraryScreen";
 import PlaylistDetailScreen from "../screens/PlaylistDetailScreen";
+import LikedSongsScreen from "../screens/LikedSongsScreen";
 
 // Components & Context
 import { MusicProvider, useMusic } from "../context/MusicContext";
@@ -52,8 +53,6 @@ function TabNavigator() {
 }
 
 const RootNavigation = () => {
-  const { isExpanded } = useMusic();
-
   return (
     <NavigationContainer>
       <Stack.Navigator
@@ -73,6 +72,11 @@ const RootNavigation = () => {
           options={{ title: "Profile" }}
         />
         <Stack.Screen
+          name="LikedSongs"
+          component={LikedSongsScreen}
+          options={{ headerShown: false, title: "Liked Songs" }}
+        />
+        <Stack.Screen
           name="PlaylistDetail"
           component={PlaylistDetailScreen}
           options={{ headerShown: false, title: "Playlist" }}
@@ -83,10 +87,15 @@ const RootNavigation = () => {
       <MiniPlayer />
 
       {/* Conditionally Render FullPlayer */}
-      {isExpanded && <FullPlayer />}
+      <FullPlayerWrapper />
     </NavigationContainer>
   );
 };
+
+function FullPlayerWrapper() {
+  const { isExpanded } = useMusic();
+  return isExpanded ? <FullPlayer /> : null;
+}
 
 export default function AppNavigator() {
   return (

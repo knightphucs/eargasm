@@ -11,7 +11,9 @@ import {
   Alert,
   Modal,
   Animated,
+  Easing,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import {
   GestureHandlerRootView,
@@ -29,6 +31,7 @@ import { db, auth } from "../config/firebaseConfig";
 import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 
 import { useMusic } from "../context/MusicContext";
+import { NowPlayingIndicator } from "../components/NowPlayingIndicator";
 
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
@@ -36,7 +39,7 @@ export default function SearchScreen() {
   const [artists, setArtists] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const { playTrack, currentTrack, isPlaying } = useMusic();
+  const { playTrack, currentTrack, isPlaying, addToQueue } = useMusic();
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -79,7 +82,7 @@ export default function SearchScreen() {
           const snapshot = await getDocs(tracksRef);
           snapshot.forEach((doc) => allTrackIds.add(doc.id));
         } catch (e) {
-          console.log(e);
+          // Ignore errors loading individual playlist tracks
         }
       })
     );
@@ -107,23 +110,41 @@ export default function SearchScreen() {
       setTracks(data.tracks?.items || []);
       setArtists(data.artists?.items || []);
     } catch (error) {
-      console.error(error);
+      if (__DEV__) console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleAddToQueue = async (trackUri: string, trackId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const ref = rowRefs.current.get(trackId);
     if (ref) ref.close();
+
+    // Find the track object
+    const track = tracks.find((t) => t.id === trackId);
+    if (!track) return;
+
+    // Add to local queue
+    addToQueue(track);
+
+    // Also try to add to Spotify queue if possible
     const token = await getSavedToken();
     if (token) {
-      await addItemToQueue(token, trackUri);
-      Alert.alert("Added", "Added to playback queue");
+      try {
+        await addItemToQueue(token, trackUri);
+      } catch (e) {
+        if (__DEV__)
+          console.log("Spotify queue add failed (normal for preview URLs)");
+      }
     }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Added", "Added to playback queue");
   };
 
   const handleOpenPlaylistModal = async (track: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const ref = rowRefs.current.get(track.id);
     if (ref) ref.close();
     setSelectedTrack(track);
@@ -177,6 +198,7 @@ export default function SearchScreen() {
           });
           setAddedTrackIds((prev) => new Set(prev).add(selectedTrack.id));
         } catch (err) {}
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert("Success", `Added to playlist ${playlistName}`);
       } else {
         Alert.alert("Notice", "Spotify did not respond.");
@@ -184,6 +206,7 @@ export default function SearchScreen() {
       setModalVisible(false);
       setSelectedTrack(null);
     } catch (error: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Error", "Could not add to playlist.");
     } finally {
       setAdding(false);
@@ -311,8 +334,11 @@ export default function SearchScreen() {
                     styles.trackItem,
                     isTrackPlaying && { backgroundColor: "#333" },
                   ]}
-                  onPress={() => playTrack(item)}
-                  activeOpacity={1}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    playTrack(item);
+                  }}
+                  activeOpacity={0.7}
                 >
                   <Image
                     source={{ uri: item.album.images[0]?.url }}
@@ -332,11 +358,12 @@ export default function SearchScreen() {
                       {item.artists[0].name}
                     </Text>
                   </View>
-                  <Ionicons
-                    name={isTrackPlaying ? "pause" : "play"}
-                    size={20}
-                    color={isTrackPlaying ? "#1DB954" : "#444"}
-                  />
+                  {isTrackPlaying && (
+                    <NowPlayingIndicator isPlaying={isPlaying} />
+                  )}
+                  {!isTrackPlaying && (
+                    <Ionicons name="play" size={20} color="#444" />
+                  )}
                 </TouchableOpacity>
               </Swipeable>
             );
