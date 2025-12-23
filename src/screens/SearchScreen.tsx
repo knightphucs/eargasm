@@ -66,7 +66,8 @@ export default function SearchScreen() {
   }, [myPlaylists]);
 
   const loadMyPlaylists = async () => {
-    const token = await getSavedToken();
+    if (!auth.currentUser) return;
+    const token = await getSavedToken(auth.currentUser.uid);
     if (token) {
       const data = await getUserPlaylists(token);
       setMyPlaylists(data.items || []);
@@ -104,7 +105,8 @@ export default function SearchScreen() {
 
   const executeSearch = async (searchTerm: string) => {
     try {
-      const token = await getSavedToken();
+      if (!auth.currentUser) return;
+      const token = await getSavedToken(auth.currentUser.uid);
       if (!token) return;
       const data = await searchSpotify(token, searchTerm);
       setTracks(data.tracks?.items || []);
@@ -117,6 +119,7 @@ export default function SearchScreen() {
   };
 
   const handleAddToQueue = async (trackUri: string, trackId: string) => {
+    if (!auth.currentUser) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const ref = rowRefs.current.get(trackId);
     if (ref) ref.close();
@@ -129,7 +132,7 @@ export default function SearchScreen() {
     addToQueue(track);
 
     // Also try to add to Spotify queue if possible
-    const token = await getSavedToken();
+    const token = await getSavedToken(auth.currentUser.uid);
     if (token) {
       try {
         await addItemToQueue(token, trackUri);
@@ -171,7 +174,8 @@ export default function SearchScreen() {
     if (!selectedTrack) return;
     setAdding(true);
     try {
-      const token = await getSavedToken();
+      if (!auth.currentUser) return;
+      const token = await getSavedToken(auth.currentUser.uid);
       if (!token) return;
       const result = await addTrackToPlaylist(
         token,

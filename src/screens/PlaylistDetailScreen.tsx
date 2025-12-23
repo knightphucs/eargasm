@@ -87,7 +87,8 @@ export default function PlaylistDetailScreen() {
   const fetchTracks = async () => {
     try {
       setLoading(true);
-      const token = await getSavedToken();
+      if (!auth.currentUser) return;
+      const token = await getSavedToken(auth.currentUser.uid);
       if (token) {
         const data = await getPlaylistTracks(token, currentPlaylist.id);
         setTracks(data.items || []);
@@ -126,15 +127,17 @@ export default function PlaylistDetailScreen() {
   );
 
   const searchSpotifyTracks = async (query: string) => {
-    const token = await getSavedToken();
+    if (!auth.currentUser) return;
+    const token = await getSavedToken(auth.currentUser.uid);
     if (!token) return;
     const res = await searchSpotify(token, query, "track");
     setSearchResults(res.tracks?.items || []);
   };
 
   const handleToggleTrack = async (track: any) => {
+    if (!auth.currentUser) return;
     const isAdded = tracks.some((t) => t.track.id === track.id);
-    const token = await getSavedToken();
+    const token = await getSavedToken(auth.currentUser.uid);
     if (!token) return;
 
     try {
@@ -156,7 +159,8 @@ export default function PlaylistDetailScreen() {
   const handleDelete = async (track: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const token = await getSavedToken();
+    if (!auth.currentUser) return;
+    const token = await getSavedToken(auth.currentUser.uid);
     if (!token) return;
 
     try {

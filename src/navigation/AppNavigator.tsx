@@ -16,6 +16,7 @@ import LikedSongsScreen from "../screens/LikedSongsScreen";
 import { MusicProvider, useMusic } from "../context/MusicContext";
 import MiniPlayer from "../components/MiniPlayer";
 import FullPlayer from "../components/FullPlayer";
+import StatsScreen from "../screens/StatsScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -41,6 +42,8 @@ function TabNavigator() {
             iconName = focused ? "search" : "search-outline";
           else if (route.name === "Library")
             iconName = focused ? "library" : "library-outline";
+          else if (route.name === "Stats")
+            iconName = focused ? "stats-chart" : "stats-chart-outline";
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
@@ -48,6 +51,7 @@ function TabNavigator() {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen name="Library" component={LibraryScreen} />
+      <Tab.Screen name="Stats" component={StatsScreen} />
     </Tab.Navigator>
   );
 }

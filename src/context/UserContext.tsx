@@ -1,9 +1,11 @@
+// src/context/UserContext.tsx
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+// 👇 Thêm onSnapshot vào import
+import { doc, setDoc, updateDoc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../config/firebaseConfig";
 
-//Types
+// Types
 export interface UserProfile {
   uid: string;
   email: string;
@@ -23,10 +25,11 @@ interface UserContextType {
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
   logout: () => Promise<void>;
 }
-//Context
+
+// Context
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-//Provider
+// Provider
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -34,10 +37,14 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-
-  //Listen Auth State
+  // Listen Auth State & Firestore Changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let unsubscribeSnapshot: () => void;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      // Nếu có listener cũ thì hủy trước khi tạo cái mới
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+
       setFirebaseUser(user);
 
       if (!user) {
@@ -46,51 +53,51 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
-      // Load Firestore user profile
       const userRef = doc(db, "users", user.uid);
-      const snapshot = await getDoc(userRef);
 
-      if (!snapshot.exists()) {
-        // Safety net: create profile if missing
-        const newUser: UserProfile = {
-          uid: user.uid,
-          email: user.email ?? "",
-          displayName: user.email?.split("@")[0] ?? "New User",
-          avatarUrl: null,
-          spotify: {
-            isConnected: false,
-            accessToken: null,
-          },
-        };
-
-        await setDoc(userRef, newUser);
-        setUserProfile(newUser);
-      } else {
-        setUserProfile(snapshot.data() as UserProfile);
-      }
-
-      setLoading(false);
+      // 👇 DÙNG ONSNAPSHOT ĐỂ LẮNG NGHE THAY ĐỔI TỪ FIREBASE
+      unsubscribeSnapshot = onSnapshot(userRef, async (snapshot) => {
+        if (!snapshot.exists()) {
+          // Safety net: create profile if missing
+          const newUser: UserProfile = {
+            uid: user.uid,
+            email: user.email ?? "",
+            displayName: user.email?.split("@")[0] ?? "New User",
+            avatarUrl: null,
+            spotify: {
+              isConnected: false,
+              accessToken: null,
+            },
+          };
+          // Khi setDoc xong, onSnapshot sẽ tự chạy lại để cập nhật state
+          await setDoc(userRef, newUser);
+        } else {
+          // Tự động cập nhật UserProfile khi SpotifyAuthContext ghi token
+          setUserProfile(snapshot.data() as UserProfile);
+        }
+        setLoading(false);
+      });
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
   }, []);
 
-//Update profile
+  // Update profile
   const updateUserProfile = async (data: Partial<UserProfile>) => {
     if (!firebaseUser) return;
 
     const userRef = doc(db, "users", firebaseUser.uid);
     await updateDoc(userRef, data);
-
-    setUserProfile((prev) =>
-      prev ? { ...prev, ...data } : prev
-    );
+    // Không cần setUserProfile thủ công ở đây nữa vì onSnapshot sẽ lo việc đó
   };
-//Logout
+
+  // Logout
   const logout = async () => {
     await auth.signOut();
-    setFirebaseUser(null);
-    setUserProfile(null);
+    // State sẽ tự reset nhờ onAuthStateChanged ở trên
   };
 
   return (
@@ -107,7 +114,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
     </UserContext.Provider>
   );
 };
-//Hook
+
+// Hook
 export const useUser = () => {
   const context = useContext(UserContext);
   if (!context) {

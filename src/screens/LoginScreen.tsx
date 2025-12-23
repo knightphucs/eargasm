@@ -13,7 +13,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../config/firebaseConfig";
 
 export default function LoginScreen() {
@@ -84,7 +84,30 @@ export default function LoginScreen() {
     if (!validateInput()) return;
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // 1. Đăng nhập Authentication
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // 2. Kiểm tra xem user này đã có dữ liệu trong Firestore chưa
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      // 3. Nếu chưa có (do lỡ tay xóa hoặc lỗi), thì tạo lại dữ liệu mặc định
+      if (!userDoc.exists()) {
+        console.log("⚠️ User missing in Firestore, restoring...");
+        await setDoc(userDocRef, {
+          email: user.email,
+          displayName: user.email?.split("@")[0] ?? "User",
+          avatarUrl: null,
+          createdAt: new Date().toISOString(),
+          spotify: {
+            isConnected: false,
+            accessToken: null,
+          },
+        });
+      }
+
+      // App sẽ tự động chuyển màn hình nhờ onAuthStateChanged ở nơi khác
     } catch (error: any) {
       Alert.alert("❌ Error signing in", error.message);
     }

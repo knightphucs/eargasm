@@ -1,3 +1,4 @@
+// src/screens/LibraryScreen.tsx
 import React, { useState, useCallback } from "react";
 import {
   View,
@@ -5,7 +6,6 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
   Modal,
   TextInput,
@@ -18,7 +18,8 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { AppStyles as styles } from "../styles/AppStyles";
+
+import { AppStyles as styles } from "../styles/AppStyles"; // ✅ Chỉ dùng 1 nguồn styles duy nhất
 
 if (
   Platform.OS === "android" &&
@@ -34,7 +35,7 @@ import {
   createPlaylist,
 } from "../services/spotifyService";
 
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore"; // Bỏ getDoc vì không cần merge nữa
 import { db, auth } from "../config/firebaseConfig";
 
 export default function LibraryScreen() {
@@ -50,8 +51,7 @@ export default function LibraryScreen() {
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // Mỗi khi màn hình được focus (quay lại từ Detail), load lại danh sách
-  // để cập nhật số lượng bài hát mới nhất
+  // Mỗi khi màn hình được focus, load lại danh sách
   useFocusEffect(
     useCallback(() => {
       fetchPlaylists();
@@ -65,31 +65,18 @@ export default function LibraryScreen() {
 
   const fetchPlaylists = async () => {
     try {
-      const token = await getSavedToken();
+      if (!auth.currentUser) return;
+      // ✅ FIX: Truyền uid vào getSavedToken để lấy đúng token
+      const token = await getSavedToken(auth.currentUser.uid);
+      
       if (token) {
         const data = await getUserPlaylists(token);
         const rawPlaylists = data.items || [];
-        // Lấy thêm thông tin trackCount từ Firestore (nếu có) để hiển thị cho đúng
-        const mergedPlaylists = await Promise.all(
-          rawPlaylists.map(async (p: any) => {
-            try {
-              const docRef = doc(db, "playlists", p.id);
-              const docSnap = await getDoc(docRef);
-              if (docSnap.exists()) {
-                const firebaseData = docSnap.data();
-                return {
-                  ...p,
-                  tracks: {
-                    ...p.tracks,
-                    total: firebaseData.trackCount ?? p.tracks.total,
-                  },
-                };
-              }
-            } catch (e) {}
-            return p;
-          })
-        );
-        setPlaylists(mergedPlaylists);
+        
+        // ✅ FIX QUAN TRỌNG:
+        // Sử dụng trực tiếp dữ liệu từ Spotify để đảm bảo số lượng bài hát (total) luôn đúng.
+        // Không cần merge với Firestore nữa vì Spotify là nguồn dữ liệu gốc (Single Source of Truth).
+        setPlaylists(rawPlaylists); 
       }
     } catch (error) {
       if (__DEV__) console.error(error);
@@ -105,7 +92,8 @@ export default function LibraryScreen() {
     }
     setCreating(true);
     try {
-      const token = await getSavedToken();
+      if (!auth.currentUser) return;
+      const token = await getSavedToken(auth.currentUser.uid);
       if (!token) return;
 
       const user = await getUserProfile(token);
@@ -113,7 +101,7 @@ export default function LibraryScreen() {
       // 1. Tạo trên Spotify
       const newPl = await createPlaylist(token, user.id, newPlaylistName);
 
-      // 2. Lưu vào Firestore để quản lý thêm
+      // 2. Lưu vào Firestore để backup (nếu cần dùng sau này)
       if (auth.currentUser) {
         await setDoc(doc(db, "playlists", newPl.id), {
           spotifyId: newPl.id,
@@ -126,7 +114,7 @@ export default function LibraryScreen() {
 
       setCreateModalVisible(false);
       setNewPlaylistName("");
-      fetchPlaylists();
+      fetchPlaylists(); // Load lại để thấy playlist mới
       Alert.alert("Thành công", "Đã tạo playlist mới!");
     } catch (e: any) {
       Alert.alert("Lỗi", e.message);
@@ -135,12 +123,11 @@ export default function LibraryScreen() {
     }
   };
 
-  // Hàm chuyển màn hình
   const openPlaylistDetail = (playlist: any, index: number) => {
     navigation.navigate("PlaylistDetail", {
       playlist: playlist,
-      playlistIndex: index, // Vị trí hiện tại
-      allPlaylists: playlists, // Danh sách tất cả playlist để vuốt qua lại
+      playlistIndex: index,
+      allPlaylists: playlists,
     });
   };
 
@@ -195,7 +182,7 @@ export default function LibraryScreen() {
           />
         ) : (
           <FlatList
-            key={viewMode} // Key thay đổi để buộc render lại khi đổi view
+            key={viewMode}
             data={playlists}
             keyExtractor={(item) => item.id}
             numColumns={viewMode === "grid" ? 2 : 1}
@@ -238,6 +225,7 @@ export default function LibraryScreen() {
                   >
                     {item.name}
                   </Text>
+                  {/* ✅ FIX: Hiển thị đúng số bài từ Spotify */}
                   <Text style={styles.count}>
                     {item.tracks?.total || 0} bài hát
                   </Text>
@@ -292,3 +280,5 @@ export default function LibraryScreen() {
     </GestureHandlerRootView>
   );
 }
+
+// ✅ FIX: ĐÃ XÓA KHỐI 'const styles = ...' Ở ĐÂY ĐỂ TRÁNH LỖI XUNG ĐỘT
