@@ -99,32 +99,54 @@ const RootNavigation = () => {
   };
 
   return (
-    <NavigationContainer theme={customTheme}>
+    <NavigationContainer
+      theme={customTheme}
+      documentTitle={{
+        formatter: (options, route) =>
+          `${options?.title ?? route?.name} - Eargasm`,
+      }}
+    >
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: colors.surface },
           headerTintColor: colors.text,
+          animation: "fade_from_bottom", // Smooth transition
+          animationDuration: 300,
         }}
       >
         <Stack.Screen
           name="Tabs"
           component={TabNavigator}
-          options={{ headerShown: false }}
+          options={{
+            headerShown: false,
+            animation: "none",
+          }}
         />
         <Stack.Screen
           name="UserProfile"
           component={UserProfileScreen}
-          options={{ title: "Profile" }}
+          options={{
+            title: "Profile",
+            animation: "slide_from_right",
+          }}
         />
         <Stack.Screen
           name="LikedSongs"
           component={LikedSongsScreen}
-          options={{ headerShown: false, title: "Liked Songs" }}
+          options={{
+            headerShown: false,
+            title: "Liked Songs",
+            animation: "slide_from_bottom",
+          }}
         />
         <Stack.Screen
           name="PlaylistDetail"
           component={PlaylistDetailScreen}
-          options={{ headerShown: false, title: "Playlist" }}
+          options={{
+            headerShown: false,
+            title: "Playlist",
+            animation: "slide_from_right",
+          }}
         />
       </Stack.Navigator>
 

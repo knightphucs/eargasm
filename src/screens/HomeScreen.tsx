@@ -28,6 +28,9 @@ import {
   SkeletonAlbumCard,
   SkeletonTrackItem,
 } from "../components/SkeletonLoader";
+import EmptyState from "../components/EmptyState";
+import EnhancedButton from "../components/EnhancedButton";
+import { PulseAnimation } from "../components/VisualEffects";
 
 const { width } = Dimensions.get("window");
 const BANNER_WIDTH = width;
@@ -317,9 +320,13 @@ export default function HomeScreen() {
       <View
         style={[styles.centerContainer, { backgroundColor: colors.background }]}
       >
-        <TouchableOpacity style={styles.loginBtn} onPress={connectSpotify}>
-          <Text style={styles.btnText}>Login Spotify</Text>
-        </TouchableOpacity>
+        <EmptyState
+          icon="musical-notes-outline"
+          title="Connect to Spotify"
+          message="Connect your Spotify account to discover and play your favorite music"
+          actionText="Connect Now"
+          onAction={connectSpotify}
+        />
       </View>
     );
   }
@@ -378,18 +385,19 @@ export default function HomeScreen() {
             </Text>
           </View>
 
-          <TouchableOpacity
+          <EnhancedButton
             onPress={() => navigation.navigate("UserProfile")}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ zIndex: 10 }}
+            hapticStyle="light"
+            scaleValue={0.92}
           >
-            <Image
-              source={avatarSource}
-              style={styles.avatar}
-              contentFit="cover"
-            />
-          </TouchableOpacity>
+            <PulseAnimation duration={2000} minScale={1} maxScale={1.08}>
+              <Image
+                source={avatarSource}
+                style={styles.avatar}
+                contentFit="cover"
+              />
+            </PulseAnimation>
+          </EnhancedButton>
         </View>
 
         {/* 2. ARTIST / CIRCLE LIST */}

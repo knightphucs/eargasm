@@ -33,6 +33,8 @@ import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 import { useMusic } from "../context/MusicContext";
 import { useTheme } from "../context/ThemeContext";
 import { NowPlayingIndicator } from "../components/NowPlayingIndicator";
+import EmptyState from "../components/EmptyState";
+import { ShimmerEffect } from "../components/VisualEffects";
 
 export default function SearchScreen() {
   const [query, setQuery] = useState("");
@@ -336,7 +338,22 @@ export default function SearchScreen() {
           data={tracks}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={renderHeader}
-          contentContainerStyle={{ paddingBottom: 150 }}
+          ListEmptyComponent={
+            !loading && query.trim() !== "" ? (
+              <EmptyState
+                icon="search-outline"
+                title="No results found"
+                message={`We couldn't find anything for "${query}". Try different keywords.`}
+              />
+            ) : query.trim() === "" ? (
+              <EmptyState
+                icon="musical-notes-outline"
+                title="Search Music"
+                message="Find your favorite songs, albums, and artists"
+              />
+            ) : null
+          }
+          contentContainerStyle={{ paddingBottom: 150, flexGrow: 1 }}
           extraData={addedTrackIds}
           renderItem={({ item }) => {
             const isTrackPlaying = currentTrack?.id === item.id && isPlaying;
