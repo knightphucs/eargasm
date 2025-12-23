@@ -20,6 +20,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AppStyles as styles } from "../styles/AppStyles"; // ✅ Chỉ dùng 1 nguồn styles duy nhất
+import { useTheme } from "../context/ThemeContext";
 
 if (
   Platform.OS === "android" &&
@@ -40,6 +41,7 @@ import { db, auth } from "../config/firebaseConfig";
 
 export default function LibraryScreen() {
   const navigation = useNavigation<any>();
+  const { colors, isDark } = useTheme();
 
   // State
   const [playlists, setPlaylists] = useState<any[]>([]);
@@ -68,15 +70,15 @@ export default function LibraryScreen() {
       if (!auth.currentUser) return;
       // ✅ FIX: Truyền uid vào getSavedToken để lấy đúng token
       const token = await getSavedToken(auth.currentUser.uid);
-      
+
       if (token) {
         const data = await getUserPlaylists(token);
         const rawPlaylists = data.items || [];
-        
+
         // ✅ FIX QUAN TRỌNG:
         // Sử dụng trực tiếp dữ liệu từ Spotify để đảm bảo số lượng bài hát (total) luôn đúng.
         // Không cần merge với Firestore nữa vì Spotify là nguồn dữ liệu gốc (Single Source of Truth).
-        setPlaylists(rawPlaylists); 
+        setPlaylists(rawPlaylists);
       }
     } catch (error) {
       if (__DEV__) console.error(error);
@@ -133,10 +135,10 @@ export default function LibraryScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header */}
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Thư viện</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Thư viện</Text>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <TouchableOpacity onPress={toggleViewMode} style={styles.iconBtn}>
               <Ionicons
@@ -196,7 +198,11 @@ export default function LibraryScreen() {
             onRefresh={fetchPlaylists}
             ListEmptyComponent={
               <Text
-                style={{ color: "#777", textAlign: "center", marginTop: 50 }}
+                style={{
+                  color: colors.textSecondary,
+                  textAlign: "center",
+                  marginTop: 50,
+                }}
               >
                 Chưa có playlist nào.
               </Text>
@@ -220,18 +226,22 @@ export default function LibraryScreen() {
                 />
                 <View style={viewMode === "list" ? styles.listInfo : {}}>
                   <Text
-                    style={styles.name}
+                    style={[styles.name, { color: colors.text }]}
                     numberOfLines={viewMode === "grid" ? 2 : 1}
                   >
                     {item.name}
                   </Text>
                   {/* ✅ FIX: Hiển thị đúng số bài từ Spotify */}
-                  <Text style={styles.count}>
+                  <Text style={[styles.count, { color: colors.textSecondary }]}>
                     {item.tracks?.total || 0} bài hát
                   </Text>
                 </View>
                 {viewMode === "list" && (
-                  <Ionicons name="chevron-forward" size={20} color="#666" />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
                 )}
               </TouchableOpacity>
             )}
@@ -246,12 +256,23 @@ export default function LibraryScreen() {
           onRequestClose={() => setCreateModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalView}>
-              <Text style={styles.modalTitle}>Tạo Playlist Mới</Text>
+            <View
+              style={[styles.modalView, { backgroundColor: colors.surface }]}
+            >
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Tạo Playlist Mới
+              </Text>
               <TextInput
-                style={styles.input}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
                 placeholder="Tên playlist..."
-                placeholderTextColor="#888"
+                placeholderTextColor={colors.textSecondary}
                 value={newPlaylistName}
                 onChangeText={setNewPlaylistName}
                 autoFocus

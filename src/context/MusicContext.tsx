@@ -248,10 +248,10 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const playableUrl = await getPlayableUrl(track);
-      
+
       if (!playableUrl) {
-         console.log("❌ No playable URL found");
-         return;
+        console.log("❌ No playable URL found");
+        return;
       }
 
       setCurrentTrack(track);

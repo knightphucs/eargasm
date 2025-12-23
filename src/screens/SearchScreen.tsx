@@ -31,6 +31,7 @@ import { db, auth } from "../config/firebaseConfig";
 import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 
 import { useMusic } from "../context/MusicContext";
+import { useTheme } from "../context/ThemeContext";
 import { NowPlayingIndicator } from "../components/NowPlayingIndicator";
 
 export default function SearchScreen() {
@@ -40,6 +41,7 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
 
   const { playTrack, currentTrack, isPlaying, addToQueue } = useMusic();
+  const { colors, isDark } = useTheme();
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -262,7 +264,9 @@ export default function SearchScreen() {
     if (artists.length === 0) return null;
     return (
       <View style={{ marginBottom: 20 }}>
-        <Text style={styles.sectionTitle}>Artists</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Artists
+        </Text>
         <FlatList
           horizontal
           data={artists}
@@ -276,27 +280,39 @@ export default function SearchScreen() {
                 }}
                 style={styles.artistImg}
               />
-              <Text style={styles.artistName} numberOfLines={1}>
+              <Text
+                style={[styles.artistName, { color: colors.text }]}
+                numberOfLines={1}
+              >
                 {item.name}
               </Text>
             </View>
           )}
         />
-        {tracks.length > 0 && <Text style={styles.sectionTitle}>Songs</Text>}
+        {tracks.length > 0 && (
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Songs
+          </Text>
+        )}
       </View>
     );
   };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Search</Text>
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={24} color="#555" />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Search</Text>
+        <View
+          style={[
+            styles.searchBox,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <Ionicons name="search" size={24} color={colors.textSecondary} />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: colors.text }]}
             placeholder="Songs, artists..."
-            placeholderTextColor="#777"
+            placeholderTextColor={colors.textSecondary}
             value={query}
             onChangeText={setQuery}
             autoCapitalize="none"
@@ -336,7 +352,10 @@ export default function SearchScreen() {
                 <TouchableOpacity
                   style={[
                     styles.trackItem,
-                    isTrackPlaying && { backgroundColor: "#333" },
+                    { backgroundColor: colors.surface },
+                    isTrackPlaying && {
+                      backgroundColor: isDark ? "#333" : "#e0e0e0",
+                    },
                   ]}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -352,13 +371,17 @@ export default function SearchScreen() {
                     <Text
                       style={[
                         styles.trackName,
+                        { color: colors.text },
                         isTrackPlaying && { color: "#1DB954" },
                       ]}
                       numberOfLines={1}
                     >
                       {item.name}
                     </Text>
-                    <Text style={styles.sub} numberOfLines={1}>
+                    <Text
+                      style={[styles.sub, { color: colors.textSecondary }]}
+                      numberOfLines={1}
+                    >
                       {item.artists[0].name}
                     </Text>
                   </View>
@@ -366,7 +389,11 @@ export default function SearchScreen() {
                     <NowPlayingIndicator isPlaying={isPlaying} />
                   )}
                   {!isTrackPlaying && (
-                    <Ionicons name="play" size={20} color="#444" />
+                    <Ionicons
+                      name="play"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
                   )}
                 </TouchableOpacity>
               </Swipeable>
@@ -382,8 +409,12 @@ export default function SearchScreen() {
           onRequestClose={() => setModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalView}>
-              <Text style={styles.modalTitle}>Add to Playlist</Text>
+            <View
+              style={[styles.modalView, { backgroundColor: colors.surface }]}
+            >
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Add to Playlist
+              </Text>
               {adding ? (
                 <ActivityIndicator
                   size="large"
@@ -391,7 +422,7 @@ export default function SearchScreen() {
                   style={{ margin: 20 }}
                 />
               ) : myPlaylists.length === 0 ? (
-                <Text style={{ color: "gray", margin: 20 }}>
+                <Text style={{ color: colors.textSecondary, margin: 20 }}>
                   You don't have any playlists.
                 </Text>
               ) : (
@@ -405,9 +436,10 @@ export default function SearchScreen() {
                       <TouchableOpacity
                         style={[
                           styles.playlistOption,
+                          { backgroundColor: colors.background },
                           hasSong && {
                             opacity: 0.5,
-                            backgroundColor: "#2a2a2a",
+                            backgroundColor: isDark ? "#2a2a2a" : "#d0d0d0",
                           },
                         ]}
                         onPress={() =>
@@ -423,7 +455,8 @@ export default function SearchScreen() {
                           <Text
                             style={[
                               styles.playlistName,
-                              hasSong && { color: "#888" },
+                              { color: colors.text },
+                              hasSong && { color: colors.textSecondary },
                             ]}
                             numberOfLines={1}
                           >
@@ -450,7 +483,7 @@ export default function SearchScreen() {
                 style={styles.closeBtn}
                 onPress={() => !adding && setModalVisible(false)}
               >
-                <Text style={{ color: "white", fontWeight: "bold" }}>
+                <Text style={{ color: colors.text, fontWeight: "bold" }}>
                   Close
                 </Text>
               </TouchableOpacity>

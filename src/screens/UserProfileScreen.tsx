@@ -103,8 +103,81 @@ export default function UserProfileScreen() {
 
   const currentAvatar = renderAvatarSource();
 
+  // Dynamic styles based on theme
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    overlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.7)",
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: "bold",
+      color: colors.text,
+      flex: 1,
+      textAlign: "center",
+    },
+    backButton: {
+      padding: 8,
+      borderRadius: 20,
+      backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)",
+    },
+    label: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+    },
+    inputWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      height: 56,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    readOnlyInput: {
+      backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
+    },
+    textInput: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 16,
+      height: "100%",
+    },
+    inputTextReadOnly: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 16,
+    },
+    inputIcon: {
+      marginRight: 12,
+      color: colors.text,
+    },
+    editBadge: {
+      position: "absolute",
+      bottom: 0,
+      right: 0,
+      backgroundColor: isDark ? "white" : "#1DB954",
+      padding: 10,
+      borderRadius: 20,
+      borderWidth: 3,
+      borderColor: colors.background,
+    },
+    editBadgeIcon: {
+      color: isDark ? "black" : "white",
+    },
+  });
+
   return (
-    <View style={styles.container}>
+    <View style={dynamicStyles.container}>
       <View style={styles.backgroundLayer}>
         <Image
           source={currentAvatar}
@@ -112,7 +185,7 @@ export default function UserProfileScreen() {
           contentFit="cover"
           blurRadius={50} // Làm mờ ảnh để tạo nền
         />
-        <View style={styles.overlay} />
+        <View style={dynamicStyles.overlay} />
       </View>
 
       <KeyboardAvoidingView
@@ -127,12 +200,12 @@ export default function UserProfileScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 navigation.goBack();
               }}
-              style={styles.backButton}
+              style={dynamicStyles.backButton}
               activeOpacity={0.7}
             >
-              <Ionicons name="chevron-back" size={28} color="white" />
+              <Ionicons name="chevron-back" size={28} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Edit Profile</Text>
+            <Text style={dynamicStyles.headerTitle}>Edit Profile</Text>
             <TouchableOpacity
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -161,14 +234,18 @@ export default function UserProfileScreen() {
 
               {/* Camera Icon Badge */}
               <TouchableOpacity
-                style={styles.editBadge}
+                style={dynamicStyles.editBadge}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   handlePickAvatar();
                 }}
                 activeOpacity={0.7}
               >
-                <Ionicons name="camera" size={20} color="black" />
+                <Ionicons
+                  name="camera"
+                  size={20}
+                  color={dynamicStyles.editBadgeIcon.color}
+                />
               </TouchableOpacity>
             </View>
 
@@ -185,37 +262,46 @@ export default function UserProfileScreen() {
           <View style={styles.formContainer}>
             {/* Email Field (Read-only) */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <View style={[styles.inputWrapper, styles.readOnlyInput]}>
+              <Text style={dynamicStyles.label}>Email</Text>
+              <View
+                style={[
+                  dynamicStyles.inputWrapper,
+                  dynamicStyles.readOnlyInput,
+                ]}
+              >
                 <Ionicons
                   name="mail-outline"
                   size={20}
-                  color="#888"
+                  color={colors.textSecondary}
                   style={styles.inputIcon}
                 />
-                <Text style={styles.inputTextReadOnly}>
+                <Text style={dynamicStyles.inputTextReadOnly}>
                   {userProfile.email}
                 </Text>
-                <Ionicons name="lock-closed-outline" size={16} color="#555" />
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={16}
+                  color={colors.textSecondary}
+                />
               </View>
             </View>
 
             {/* Display Name Field */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Display Name</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={dynamicStyles.label}>Display Name</Text>
+              <View style={dynamicStyles.inputWrapper}>
                 <Ionicons
                   name="person-outline"
                   size={20}
-                  color="white"
+                  color={colors.text}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   value={displayName}
                   onChangeText={setDisplayName}
-                  style={styles.textInput}
+                  style={dynamicStyles.textInput}
                   placeholder="Your display name"
-                  placeholderTextColor="#555"
+                  placeholderTextColor={colors.textSecondary}
                 />
                 <Ionicons name="pencil-outline" size={16} color="#1DB954" />
               </View>
@@ -223,20 +309,20 @@ export default function UserProfileScreen() {
 
             {/* Bio Field */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Bio</Text>
-              <View style={styles.inputWrapper}>
+              <Text style={dynamicStyles.label}>Bio</Text>
+              <View style={dynamicStyles.inputWrapper}>
                 <Ionicons
                   name="text-outline"
                   size={20}
-                  color="white"
+                  color={colors.text}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   value={bio}
                   onChangeText={setBio}
-                  style={styles.textInput}
+                  style={dynamicStyles.textInput}
                   placeholder="Your bio"
-                  placeholderTextColor="#555"
+                  placeholderTextColor={colors.textSecondary}
                 />
                 <Ionicons name="pencil-outline" size={16} color="#1DB954" />
               </View>
@@ -284,16 +370,10 @@ export default function UserProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-
   // Background Effects
   backgroundLayer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: -1,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.7)", // Phủ đen 70% lên ảnh nền mờ
   },
 
   scrollContent: {
@@ -308,18 +388,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: Platform.OS === "ios" ? 60 : 40,
     marginBottom: 20,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.1)",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "white",
-    flex: 1,
-    textAlign: "center",
   },
   themeButton: {
     padding: 8,
@@ -347,16 +415,6 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "#1DB954",
   },
-  editBadge: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    backgroundColor: "white",
-    padding: 10,
-    borderRadius: 20,
-    borderWidth: 3,
-    borderColor: "#121212",
-  },
   unsavedContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -382,40 +440,8 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 24,
   },
-  label: {
-    color: "#b3b3b3",
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#282828",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 56,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  readOnlyInput: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
   inputIcon: {
     marginRight: 12,
-  },
-  textInput: {
-    flex: 1,
-    color: "white",
-    fontSize: 16,
-    height: "100%",
-  },
-  inputTextReadOnly: {
-    flex: 1,
-    color: "#888",
-    fontSize: 16,
   },
 
   // Buttons

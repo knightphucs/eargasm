@@ -23,11 +23,13 @@ import {
   doc,
 } from "firebase/firestore";
 import { useMusic } from "../context/MusicContext";
+import { useTheme } from "../context/ThemeContext";
 import { NowPlayingIndicator } from "../components/NowPlayingIndicator";
 
 export default function LikedSongsScreen() {
   const navigation = useNavigation();
   const { playTrack, currentTrack, isPlaying } = useMusic();
+  const { colors, isDark } = useTheme();
 
   const [likedSongs, setLikedSongs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,7 +155,9 @@ export default function LikedSongsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
+      <View
+        style={[styles.centerContainer, { backgroundColor: colors.background }]}
+      >
         <ActivityIndicator size="large" color="#E91E63" />
       </View>
     );
@@ -161,12 +165,18 @@ export default function LikedSongsScreen() {
 
   if (likedSongs.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         {renderHeader()}
         <View style={styles.emptyContainer}>
-          <Ionicons name="heart-outline" size={80} color="#555" />
-          <Text style={styles.emptyTitle}>No liked songs yet</Text>
-          <Text style={styles.emptySubtitle}>
+          <Ionicons
+            name="heart-outline"
+            size={80}
+            color={colors.textSecondary}
+          />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>
+            No liked songs yet
+          </Text>
+          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
             Double tap on album art to like songs
           </Text>
         </View>
@@ -175,7 +185,7 @@ export default function LikedSongsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
         data={likedSongs}
         keyExtractor={(item) => item.id}
@@ -186,7 +196,11 @@ export default function LikedSongsScreen() {
 
           return (
             <TouchableOpacity
-              style={[styles.songItem, isTrackPlaying && styles.songItemActive]}
+              style={[
+                styles.songItem,
+                { backgroundColor: colors.surface },
+                isTrackPlaying && styles.songItemActive,
+              ]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 const track = {
@@ -209,7 +223,9 @@ export default function LikedSongsScreen() {
               }}
               activeOpacity={0.7}
             >
-              <Text style={styles.indexText}>{index + 1}</Text>
+              <Text style={[styles.indexText, { color: colors.textSecondary }]}>
+                {index + 1}
+              </Text>
 
               <Image
                 source={{ uri: item.album?.images?.[0]?.url }}
@@ -222,16 +238,24 @@ export default function LikedSongsScreen() {
                 <Text
                   style={[
                     styles.songName,
+                    { color: colors.text },
                     isTrackPlaying && styles.songNameActive,
                   ]}
                   numberOfLines={1}
                 >
                   {item.name}
                 </Text>
-                <Text style={styles.artistName} numberOfLines={1}>
+                <Text
+                  style={[styles.artistName, { color: colors.textSecondary }]}
+                  numberOfLines={1}
+                >
                   {item.artists?.[0]?.name || "Unknown Artist"}
                 </Text>
-                <Text style={styles.dateText}>{formatDate(item.likedAt)}</Text>
+                <Text
+                  style={[styles.dateText, { color: colors.textSecondary }]}
+                >
+                  {formatDate(item.likedAt)}
+                </Text>
               </View>
 
               {isTrackPlaying && <NowPlayingIndicator isPlaying={isPlaying} />}
