@@ -36,10 +36,12 @@ export default function FullPlayer() {
     position,
     duration,
     seekTo,
+    queue,
+    removeFromQueue,
   } = useMusic();
 
   const [queueVisible, setQueueVisible] = useState(false);
-  const [queue, setQueue] = useState<any[]>([]);
+
   const [sleepTimerVisible, setSleepTimerVisible] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [showHeartAnim, setShowHeartAnim] = useState(false);
@@ -59,30 +61,19 @@ export default function FullPlayer() {
 
   const panResponder = useRef(
     PanResponder.create({
-      // Cho phép view con (như Slider/Button) nhận sự kiện Touch trước
       onStartShouldSetPanResponder: () => false,
-
-      // Quyết định khi nào thì View cha (FullPlayer) "cướp" sự kiện để xử lý vuốt
       onMoveShouldSetPanResponder: (_, gesture) => {
         const isVerticalSwipe = Math.abs(gesture.dy) > Math.abs(gesture.dx);
         const isSignificantMove = Math.abs(gesture.dy) > 10;
-
-        // CHỈ "cướp" sự kiện nếu:
-        // 1. Vuốt dọc nhiều hơn vuốt ngang (để không chặn Slider)
-        // 2. Vuốt đủ dài (> 10px)
         return isVerticalSwipe && isSignificantMove;
       },
-
       onPanResponderMove: (_, gesture) => {
         if (gesture.dy > 0) {
-          // Kéo xuống -> Di chuyển view
           translateY.setValue(gesture.dy);
         } else {
-          // Kéo lên -> Kháng lực (Rubber banding)
           translateY.setValue(gesture.dy / 3);
         }
       },
-
       onPanResponderRelease: (_, gesture) => {
         if (gesture.dy > DISMISS_THRESHOLD || gesture.vy > 0.6) {
           closeAnim();
@@ -118,7 +109,6 @@ export default function FullPlayer() {
     }).start();
   }, []);
 
-  // Animate play button on play/pause
   useEffect(() => {
     Animated.sequence([
       Animated.timing(playButtonScale, {
@@ -135,21 +125,13 @@ export default function FullPlayer() {
     ]).start();
   }, [isPlaying]);
 
-  // Check if track is liked
+  // Check liked status logic (giữ nguyên)
   useEffect(() => {
     const checkLikedStatus = async () => {
-      if (!currentTrack) {
+      if (!currentTrack || !auth.currentUser) {
         setIsLiked(false);
         return;
       }
-
-      if (!auth.currentUser) {
-        if (__DEV__)
-          console.log("⚠️ Cannot check liked status: user not authenticated");
-        setIsLiked(false);
-        return;
-      }
-
       try {
         const likedRef = doc(
           db,
@@ -160,37 +142,23 @@ export default function FullPlayer() {
         );
         const likedDoc = await getDoc(likedRef);
         setIsLiked(likedDoc.exists());
-      } catch (error: any) {
-        // Silently handle Firebase permission errors
-        if (__DEV__) {
-          if (error?.code === "permission-denied") {
-            console.log(
-              "⚠️ Firebase permissions issue - liked check failed (non-critical)"
-            );
-          } else {
-            console.error("Error checking liked status:", error);
-          }
-        }
+      } catch (error) {
         setIsLiked(false);
       }
     };
     checkLikedStatus();
   }, [currentTrack]);
 
+  // Handle Double Tap logic (giữ nguyên)
   const handleDoubleTap = async () => {
     const now = Date.now();
     const DOUBLE_TAP_DELAY = 300;
-
     if (now - lastTap.current < DOUBLE_TAP_DELAY) {
-      // Double tap detected!
       lastTap.current = 0;
-
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
       try {
         const user = auth.currentUser;
         if (!user || !currentTrack) return;
-
         const likedRef = doc(
           db,
           "users",
@@ -200,12 +168,10 @@ export default function FullPlayer() {
         );
 
         if (isLiked) {
-          // Unlike
           await deleteDoc(likedRef);
           setIsLiked(false);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         } else {
-          // Like
           await setDoc(likedRef, {
             trackId: currentTrack.id,
             name: currentTrack.name,
@@ -217,7 +183,6 @@ export default function FullPlayer() {
           setIsLiked(true);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-          // Show heart animation
           setShowHeartAnim(true);
           Animated.parallel([
             Animated.sequence([
@@ -253,8 +218,7 @@ export default function FullPlayer() {
           });
         }
       } catch (error) {
-        if (__DEV__) console.error("Error toggling like:", error);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        // error handling
       }
     } else {
       lastTap.current = now;
@@ -264,7 +228,6 @@ export default function FullPlayer() {
   return (
     <>
       <Animated.View
-        // 👉 THAY ĐỔI QUAN TRỌNG: Gắn panHandlers vào view tổng ngoài cùng
         {...panResponder.panHandlers}
         style={[styles.container, { transform: [{ translateY }] }]}
       >
@@ -321,8 +284,6 @@ export default function FullPlayer() {
                 cachePolicy="memory-disk"
                 transition={300}
               />
-
-              {/* Heart Animation Overlay */}
               {showHeartAnim && (
                 <Animated.View
                   style={[
@@ -336,8 +297,6 @@ export default function FullPlayer() {
                   <Ionicons name="heart" size={120} color="#E91E63" />
                 </Animated.View>
               )}
-
-              {/* Liked Indicator */}
               {isLiked && (
                 <View style={styles.likedIndicator}>
                   <Ionicons name="heart" size={24} color="#E91E63" />
@@ -366,7 +325,7 @@ export default function FullPlayer() {
             </Text>
           </View>
 
-          {/* Progress: Slider cần nằm trong View không bị chặn bởi PanResponder ngang */}
+          {/* Progress */}
           <View style={styles.progressContainer}>
             <Slider
               style={{ width: "100%", height: 40 }}
@@ -377,10 +336,8 @@ export default function FullPlayer() {
               maximumTrackTintColor="#555"
               thumbTintColor="#1DB954"
               onSlidingComplete={seekTo}
-              // fix lỗi slider trên Android đôi khi bị giật khi nằm trong PanResponder
               onSlidingStart={() => {}}
             />
-
             <View style={styles.timeRow}>
               <Text style={styles.timeText}>{formatTime(position)}</Text>
               <Text style={styles.timeText}>{formatTime(duration)}</Text>
@@ -403,7 +360,7 @@ export default function FullPlayer() {
               <TouchableOpacity
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  playTrack(currentTrack);
+                  playTrack(currentTrack); // Toggle Play/Pause
                 }}
                 activeOpacity={0.7}
               >
@@ -428,17 +385,18 @@ export default function FullPlayer() {
         </View>
       </Animated.View>
 
+      {/* Queue Modal - Kết nối với Global Queue */}
       <QueueModal
         visible={queueVisible}
         queue={queue}
         currentTrackId={currentTrack?.id}
         onClose={() => setQueueVisible(false)}
         onTrackSelect={(track) => {
-          playTrack(track);
+          playTrack(track, queue);
           setQueueVisible(false);
         }}
         onRemoveTrack={(trackId) => {
-          setQueue(queue.filter((t) => t.id !== trackId));
+          removeFromQueue(trackId);
         }}
       />
 
@@ -446,7 +404,6 @@ export default function FullPlayer() {
         visible={sleepTimerVisible}
         onClose={() => setSleepTimerVisible(false)}
         onTimerEnd={() => {
-          // Stop music when timer ends
           if (isPlaying) {
             playTrack(currentTrack);
           }
@@ -492,7 +449,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "space-evenly",
-    paddingBottom: 50, // Bottom padding
+    paddingBottom: 50,
   },
   artworkContainer: {
     shadowColor: "#000",

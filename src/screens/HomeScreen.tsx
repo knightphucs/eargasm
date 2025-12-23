@@ -23,7 +23,11 @@ import { useMusic } from "../context/MusicContext";
 import { useSpotifyAuth } from "../context/SpotifyAuthContext";
 import { useUser } from "../context/UserContext";
 import { useTheme } from "../context/ThemeContext";
-import { getUserTopTracks } from "../services/spotifyService";
+import {
+  getSavedToken,
+  getUserPlaylists,
+  getUserTopTracks,
+} from "../services/spotifyService";
 import {
   SkeletonAlbumCard,
   SkeletonTrackItem,
@@ -31,6 +35,9 @@ import {
 import EmptyState from "../components/EmptyState";
 import EnhancedButton from "../components/EnhancedButton";
 import { PulseAnimation } from "../components/VisualEffects";
+import { useTrackOptions } from "../hooks/useTrackOptions";
+import { auth } from "../config/firebaseConfig";
+import TrackOptionsModal from "../components/TrackOptionsModal";
 
 const { width } = Dimensions.get("window");
 const BANNER_WIDTH = width;
@@ -40,7 +47,7 @@ const BANNER_HEIGHT = 280;
 interface Track {
   id: string;
   name: string;
-  artists: { name: string }[];
+  artists: { name: string; id: string }[];
   album: { images: { url: string }[] };
   images?: { url: string }[];
 }
@@ -218,6 +225,22 @@ export default function HomeScreen() {
   const autoScrollTimer = useRef<NodeJS.Timeout | null>(null);
   const currentOffset = useRef(0);
 
+  const trackOptions = useTrackOptions();
+  const [myPlaylists, setMyPlaylists] = useState<any[]>([]);
+
+  useEffect(() => {
+    loadMyPlaylists();
+  }, []);
+
+  const loadMyPlaylists = async () => {
+    if (!auth.currentUser) return;
+    const token = await getSavedToken(auth.currentUser.uid);
+    if (token) {
+      const data = await getUserPlaylists(token);
+      setMyPlaylists(data.items || []);
+    }
+  };
+
   const getGreeting = () => {
     const hours = new Date().getHours();
     if (hours < 12) return "Good Morning";
@@ -284,7 +307,7 @@ export default function HomeScreen() {
       if (isUserInteracting.current) return;
 
       trendingRef.current?.scrollToOffset({
-        offset: currentOffset.current + 0.4, // 👈 mượt
+        offset: currentOffset.current + 0.4,
         animated: false,
       });
     }, 16);
@@ -332,239 +355,284 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Fix: StatusBar props correct */}
-      <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
-        translucent
-        backgroundColor="transparent"
-      />
+    <>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {/* Fix: StatusBar props correct */}
+        <StatusBar
+          barStyle={isDark ? "light-content" : "dark-content"}
+          translucent
+          backgroundColor="transparent"
+        />
 
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 120, paddingTop: 0 }} // Remove top padding because banner is translucent
-        showsVerticalScrollIndicator={false}
-      >
-        {/* 1. AUTO SCROLLING HEADER */}
-        {loading ? (
-          <View
-            style={{
-              height: 280,
-              justifyContent: "center",
-              backgroundColor: "#1E1E1E",
-            }}
-          >
-            <View style={{ paddingHorizontal: 20 }}>
-              <SkeletonAlbumCard />
-            </View>
-          </View>
-        ) : (
-          <AutoScrollingBanner
-            data={bannerData}
-            onPlay={(item) => playTrack(item, tracks)}
-          />
-        )}
-
-        {/* Header Greeting */}
-        <View style={styles.greetingContainer}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.greetingTitle, { color: colors.text }]}>
-              Discover
-            </Text>
-          </View>
-          <View style={{ flex: 1, alignItems: "flex-end", marginRight: 10 }}>
-            <Text
-              style={[styles.greetingText, { color: colors.textSecondary }]}
-            >
-              {getGreeting()},
-            </Text>
-            <Text
-              style={[styles.userNameText, { color: colors.text }]}
-              numberOfLines={1}
-            >
-              {displayName}
-            </Text>
-          </View>
-
-          <EnhancedButton
-            onPress={() => navigation.navigate("UserProfile")}
-            hapticStyle="light"
-            scaleValue={0.92}
-          >
-            <PulseAnimation duration={2000} minScale={1} maxScale={1.08}>
-              <Image
-                source={avatarSource}
-                style={styles.avatar}
-                contentFit="cover"
-              />
-            </PulseAnimation>
-          </EnhancedButton>
-        </View>
-
-        {/* 2. ARTIST / CIRCLE LIST */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeader, { color: colors.text }]}>
-            Top Artists
-          </Text>
-          <FlatList
-            horizontal
-            data={artistData}
-            keyExtractor={(item) => `artist-${item.id}`}
-            renderItem={({ item }) => (
-              <CircleArtistItem
-                item={item}
-                textColor={colors.textSecondary}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  playTrack(item, tracks);
-                  setTimeout(() => {
-                    Haptics.notificationAsync(
-                      Haptics.NotificationFeedbackType.Success
-                    );
-                  }, 150);
-                }}
-              />
-            )}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingLeft: 20 }}
-            removeClippedSubviews={true}
-            maxToRenderPerBatch={5}
-            windowSize={5}
-            initialNumToRender={5}
-          />
-        </View>
-
-        {/* 3. TRENDING / RECENT (Cards) */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionHeader, { color: colors.text }]}>
-            Trending Now
-          </Text>
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 120, paddingTop: 0 }} // Remove top padding because banner is translucent
+          showsVerticalScrollIndicator={false}
+        >
+          {/* 1. AUTO SCROLLING HEADER */}
           {loading ? (
-            <FlatList
-              horizontal
-              data={[1, 2, 3]}
-              keyExtractor={(item) => `skeleton-${item}`}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 20 }}
-              renderItem={() => <SkeletonAlbumCard />}
-            />
+            <View
+              style={{
+                height: 280,
+                justifyContent: "center",
+                backgroundColor: "#1E1E1E",
+              }}
+            >
+              <View style={{ paddingHorizontal: 20 }}>
+                <SkeletonAlbumCard />
+              </View>
+            </View>
           ) : (
-            <FlatList
-              ref={trendingRef}
-              horizontal
-              data={listData}
-              keyExtractor={(item) => `trend-${item.id}`}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 20 }}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.cardItem}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    playTrack(item, tracks);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Image
-                    source={{ uri: item.album?.images?.[0]?.url }}
-                    style={styles.cardImage}
-                    cachePolicy="memory-disk"
-                    transition={200}
-                  />
-                  <Text
-                    style={[styles.cardTitle, { color: colors.text }]}
-                    numberOfLines={1}
-                  >
-                    {item.name}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              scrollEventThrottle={16}
-              onScroll={onTrendingScroll}
-              onTouchStart={onTouchStart}
-              onTouchEnd={onTouchEnd}
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={3}
-              windowSize={3}
-              initialNumToRender={3}
-              getItemLayout={(data, index) => ({
-                length: 140,
-                offset: 140 * index,
-                index,
-              })}
+            <AutoScrollingBanner
+              data={bannerData}
+              onPlay={(item) => playTrack(item, tracks)}
             />
           )}
-        </View>
 
-        {/* 4. VERTICAL LIST */}
-        <View style={styles.section}>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              paddingRight: 20,
-              alignItems: "center",
-            }}
-          >
-            <Text style={[styles.sectionHeader, { color: colors.text }]}>
-              On Your Heavy Rotation
-            </Text>
-            <TouchableOpacity onPress={logoutSpotify}>
-              <Text style={{ color: "#1DB954", fontSize: 12 }}>Logout</Text>
-            </TouchableOpacity>
+          {/* Header Greeting */}
+          <View style={styles.greetingContainer}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.greetingTitle, { color: colors.text }]}>
+                Discover
+              </Text>
+            </View>
+            <View style={{ flex: 1, alignItems: "flex-end", marginRight: 10 }}>
+              <Text
+                style={[styles.greetingText, { color: colors.textSecondary }]}
+              >
+                {getGreeting()},
+              </Text>
+              <Text
+                style={[styles.userNameText, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {displayName}
+              </Text>
+            </View>
+
+            <EnhancedButton
+              onPress={() => navigation.navigate("UserProfile")}
+              hapticStyle="light"
+              scaleValue={0.92}
+            >
+              <PulseAnimation duration={2000} minScale={1} maxScale={1.08}>
+                <Image
+                  source={avatarSource}
+                  style={styles.avatar}
+                  contentFit="cover"
+                />
+              </PulseAnimation>
+            </EnhancedButton>
           </View>
 
-          {listData.map((item, index) => {
-            const isTrackPlaying = currentTrack?.id === item.id && isPlaying;
-            return (
-              <TouchableOpacity
-                key={`list-${item.id}-${index}`}
-                style={styles.rowItem}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  playTrack(item, tracks);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[styles.indexText, { color: colors.textSecondary }]}
-                >
-                  {index + 1}
-                </Text>
-                <Image
-                  source={{ uri: item.album?.images?.[0]?.url }}
-                  style={styles.rowImage}
+          {/* 2. ARTIST / CIRCLE LIST */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>
+              Top Artists
+            </Text>
+            <FlatList
+              horizontal
+              data={artistData}
+              keyExtractor={(item) => `artist-${item.id}`}
+              renderItem={({ item }) => (
+                <CircleArtistItem
+                  item={item}
+                  textColor={colors.textSecondary}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    const artistId = item.artists && item.artists[0]?.id;
+                    if (artistId) {
+                      navigation.navigate("ArtistDetails", {
+                        artistId: item.artists[0].id,
+                      });
+                    }
+                  }}
                 />
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={[
-                      styles.rowTitle,
-                      { color: colors.text },
-                      isTrackPlaying && { color: "#1DB954" },
-                    ]}
-                    numberOfLines={1}
+              )}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingLeft: 20 }}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={5}
+              windowSize={5}
+              initialNumToRender={5}
+            />
+          </View>
+
+          {/* 3. TRENDING / RECENT (Cards) */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionHeader, { color: colors.text }]}>
+              Trending Now
+            </Text>
+            {loading ? (
+              <FlatList
+                horizontal
+                data={[1, 2, 3]}
+                keyExtractor={(item) => `skeleton-${item}`}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingLeft: 20 }}
+                renderItem={() => <SkeletonAlbumCard />}
+              />
+            ) : (
+              <FlatList
+                ref={trendingRef}
+                horizontal
+                data={listData}
+                keyExtractor={(item) => `trend-${item.id}`}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingLeft: 20 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.cardItem}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      navigation.navigate("AlbumDetails", {
+                        albumId: item.id,
+                        albumData: item.album,
+                      });
+                    }}
+                    activeOpacity={0.7}
                   >
-                    {item.name}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.rowSubTitle,
-                      { color: colors.textSecondary },
-                    ]}
+                    <Image
+                      source={{ uri: item.album?.images?.[0]?.url }}
+                      style={styles.cardImage}
+                      cachePolicy="memory-disk"
+                      transition={200}
+                    />
+                    <Text
+                      style={[styles.cardTitle, { color: colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                scrollEventThrottle={16}
+                onScroll={onTrendingScroll}
+                onTouchStart={onTouchStart}
+                onTouchEnd={onTouchEnd}
+                removeClippedSubviews={true}
+                maxToRenderPerBatch={3}
+                windowSize={3}
+                initialNumToRender={3}
+                getItemLayout={(data, index) => ({
+                  length: 140,
+                  offset: 140 * index,
+                  index,
+                })}
+              />
+            )}
+          </View>
+
+          {/* 4. VERTICAL LIST */}
+          <View style={styles.section}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                paddingRight: 20,
+                alignItems: "center",
+              }}
+            >
+              <Text style={[styles.sectionHeader, { color: colors.text }]}>
+                On Your Heavy Rotation
+              </Text>
+            </View>
+
+            {listData.map((item, index) => {
+              const isTrackPlaying = currentTrack?.id === item.id && isPlaying;
+              return (
+                <View key={`list-${item.id}-${index}`} style={styles.rowItem}>
+                  {/* TAP ROW → PLAY */}
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: "row",
+                      flex: 1,
+                      alignItems: "center",
+                    }}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      playTrack(item, tracks);
+                    }}
+                    activeOpacity={0.7}
                   >
-                    {item.artists[0].name}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.indexText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      {index + 1}
+                    </Text>
+
+                    <Image
+                      source={{ uri: item.album?.images?.[0]?.url }}
+                      style={styles.rowImage}
+                    />
+
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.rowTitle,
+                          { color: colors.text },
+                          isTrackPlaying && { color: "#1DB954" },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.rowSubTitle,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {item.artists[0].name}
+                      </Text>
+                    </View>
+
+                    <Ionicons
+                      name="play-circle"
+                      size={24}
+                      color={isTrackPlaying ? "#1DB954" : colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+
+                  {/* 3 DOT OPTIONS */}
+                  <TouchableOpacity
+                    onPress={() => trackOptions.openOptions(item, myPlaylists)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{ paddingLeft: 12 }}
+                  >
+                    <Ionicons
+                      name="ellipsis-horizontal"
+                      size={22}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
                 </View>
-                <Ionicons
-                  name="play-circle"
-                  size={24}
-                  color={isTrackPlaying ? "#1DB954" : colors.textSecondary}
-                />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
-    </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
+
+      <TrackOptionsModal
+        visible={trackOptions.visible}
+        track={trackOptions.selectedTrack}
+        playlists={myPlaylists}
+        playlistsContainingTrack={trackOptions.playlistsContainingTrack}
+        adding={trackOptions.adding}
+        onPlayNext={() =>
+          trackOptions.selectedTrack &&
+          trackOptions.playNext(trackOptions.selectedTrack)
+        }
+        onAddQueue={() =>
+          trackOptions.selectedTrack &&
+          trackOptions.addQueue(trackOptions.selectedTrack)
+        }
+        onAddPlaylist={trackOptions.addPlaylist}
+        onClose={trackOptions.close}
+      />
+    </>
   );
 }
 

@@ -8,6 +8,7 @@ import SplashScreen from "./src/components/SplashScreen";
 import { SpotifyAuthProvider } from "./src/context/SpotifyAuthContext";
 import { UserProvider, useUser } from "./src/context/UserContext";
 import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 function Root() {
   const { firebaseUser, loading } = useUser();
@@ -49,12 +50,14 @@ function Root() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <UserProvider>
-        <SafeAreaProvider>
-          <Root />
-        </SafeAreaProvider>
-      </UserProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <UserProvider>
+          <SafeAreaProvider>
+            <Root />
+          </SafeAreaProvider>
+        </UserProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

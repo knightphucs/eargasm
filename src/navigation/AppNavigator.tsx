@@ -22,6 +22,8 @@ import { useTheme } from "../context/ThemeContext";
 import MiniPlayer from "../components/MiniPlayer";
 import FullPlayer from "../components/FullPlayer";
 import StatsScreen from "../screens/StatsScreen";
+import ArtistDetailsScreen from "../screens/ArtistDetailsScreen";
+import AlbumDetailsScreen from "../screens/AlbumDetailsScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -147,6 +149,16 @@ const RootNavigation = () => {
             title: "Playlist",
             animation: "slide_from_right",
           }}
+        />
+        <Stack.Screen
+          name="ArtistDetails"
+          component={ArtistDetailsScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="AlbumDetails"
+          component={AlbumDetailsScreen}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
 

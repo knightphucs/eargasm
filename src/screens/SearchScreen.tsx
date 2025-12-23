@@ -13,6 +13,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -37,12 +38,14 @@ import EmptyState from "../components/EmptyState";
 import { ShimmerEffect } from "../components/VisualEffects";
 
 export default function SearchScreen() {
+  const navigation = useNavigation<any>();
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState<any[]>([]);
   const [artists, setArtists] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const { playTrack, currentTrack, isPlaying, addToQueue } = useMusic();
+  const { playTrack, currentTrack, isPlaying, addToQueue, insertNext } =
+    useMusic();
   const { colors, isDark } = useTheme();
 
   // Modal State
@@ -150,6 +153,18 @@ export default function SearchScreen() {
     Alert.alert("Added", "Added to playback queue");
   };
 
+  const openRowId = useRef<string | null>(null);
+
+  const onSwipeableWillOpen = (currentId: string) => {
+    if (openRowId.current && openRowId.current !== currentId) {
+      const prevRow = rowRefs.current.get(openRowId.current);
+      if (prevRow) {
+        prevRow.close();
+      }
+    }
+    openRowId.current = currentId;
+  };
+
   const handleOpenPlaylistModal = async (track: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const ref = rowRefs.current.get(track.id);
@@ -222,39 +237,64 @@ export default function SearchScreen() {
   };
 
   const renderRightActions = (progress: any, dragX: any, track: any) => {
-    const trans = dragX.interpolate({
-      inputRange: [-140, 0],
-      outputRange: [0, 140],
+    const scale = dragX.interpolate({
+      inputRange: [-160, -80, 0],
+      outputRange: [1, 0.8, 0],
       extrapolate: "clamp",
     });
+
+    const opacity = dragX.interpolate({
+      inputRange: [-160, -100, 0],
+      outputRange: [1, 1, 0],
+      extrapolate: "clamp",
+    });
+
     const isAdded = addedTrackIds.has(track.id);
+
     return (
-      <View style={{ width: 140, flexDirection: "row" }}>
-        <Animated.View style={{ flex: 1, transform: [{ translateX: trans }] }}>
+      <View style={styles.rightActionsContainer}>
+        {/* --- Nút PLAY NEXT --- */}
+        <Animated.View style={{ opacity, transform: [{ scale }] }}>
           <TouchableOpacity
-            style={[styles.rectBtn, { backgroundColor: "#FF8C00" }]}
-            onPress={() => handleAddToQueue(track.uri, track.id)}
+            style={[styles.actionBtn, { backgroundColor: "#E91E63" }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+              insertNext(track);
+
+              const ref = rowRefs.current.get(track.id);
+              if (ref) ref.close();
+
+              Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success
+              );
+              Alert.alert("Đã thêm", "Sẽ phát ngay sau bài hiện tại.");
+            }}
+            activeOpacity={0.8}
           >
-            <Ionicons name="list" size={24} color="white" />
-            <Text style={styles.rectBtnText}>Queue</Text>
+            <Ionicons name="return-down-forward" size={26} color="white" />
+            <Text style={styles.actionText}>Play Next</Text>
           </TouchableOpacity>
         </Animated.View>
-        <Animated.View style={{ flex: 1, transform: [{ translateX: trans }] }}>
+
+        {/* --- Nút ADD --- */}
+        <Animated.View style={{ opacity, transform: [{ scale }] }}>
           <TouchableOpacity
             style={[
-              styles.rectBtn,
-              { backgroundColor: isAdded ? "#555" : "#1DB954" },
+              styles.actionBtn,
+              { backgroundColor: isAdded ? "#404040" : "#1DB954" }, // Xám nếu đã add, Xanh nếu chưa
             ]}
             onPress={() => !isAdded && handleOpenPlaylistModal(track)}
             disabled={isAdded}
+            activeOpacity={0.8}
           >
-            {isAdded ? (
-              <Ionicons name="checkmark-circle" size={28} color="#aaa" />
-            ) : (
-              <Ionicons name="add" size={28} color="white" />
-            )}
-            <Text style={[styles.rectBtnText, isAdded && { color: "#aaa" }]}>
-              {isAdded ? "Added" : "Add"}
+            <Ionicons
+              name={isAdded ? "checkmark-circle" : "heart-circle-outline"}
+              size={26}
+              color={isAdded ? "#AAA" : "white"}
+            />
+            <Text style={[styles.actionText, isAdded && { color: "#AAA" }]}>
+              {isAdded ? "Saved" : "Save"}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -275,7 +315,12 @@ export default function SearchScreen() {
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <View style={styles.artistItem}>
+            <TouchableOpacity
+              style={styles.artistItem}
+              onPress={() =>
+                navigation.navigate("ArtistDetails", { artistId: item.id })
+              }
+            >
               <Image
                 source={{
                   uri: item.images[0]?.url || "https://via.placeholder.com/100",
@@ -288,7 +333,7 @@ export default function SearchScreen() {
               >
                 {item.name}
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
         />
         {tracks.length > 0 && (
@@ -365,6 +410,9 @@ export default function SearchScreen() {
                 }}
                 renderRightActions={(p, d) => renderRightActions(p, d, item)}
                 overshootRight={false}
+                friction={1}
+                rightThreshold={40}
+                onSwipeableWillOpen={() => onSwipeableWillOpen(item.id)}
               >
                 <TouchableOpacity
                   style={[
@@ -375,6 +423,12 @@ export default function SearchScreen() {
                     },
                   ]}
                   onPress={() => {
+                    if (openRowId.current) {
+                      const prevRow = rowRefs.current.get(openRowId.current);
+                      prevRow?.close();
+                      openRowId.current = null;
+                    }
+
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     playTrack(item);
                   }}
@@ -567,6 +621,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
     marginTop: 2,
+  },
+  rightActionsContainer: {
+    width: 160,
+    flexDirection: "row",
+    height: "100%",
+  },
+  actionBtn: {
+    width: 80,
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  actionText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 4,
+    letterSpacing: 0.5,
   },
   modalOverlay: {
     flex: 1,

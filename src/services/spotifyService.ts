@@ -87,9 +87,60 @@ export const getAlbumDetails = async (token: string, albumId: string) => {
   return await response.json();
 };
 
+export const getAlbumTracks = async (
+  token: string,
+  albumId: string,
+  market = "VN"
+) => {
+  const response = await fetch(
+    `https://api.spotify.com/v1/albums/${albumId}/tracks?market=${market}&limit=50`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  return await response.json();
+};
+
+export const checkUserSavedAlbums = async (token: string, albumId: string) => {
+  const response = await fetch(
+    `https://api.spotify.com/v1/me/albums/contains?ids=${albumId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+  const data = await response.json();
+  return data[0];
+};
+
 export const getArtistDetails = async (token: string, artistId: string) => {
   const response = await fetch(
     `https://api.spotify.com/v1/artists/${artistId}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  return await response.json();
+};
+
+export const getArtistTopTracks = async (
+  token: string,
+  artistId: string,
+  market = "VN"
+) => {
+  const response = await fetch(
+    `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=${market}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  return await response.json();
+};
+
+export const getArtistAlbums = async (token: string, artistId: string) => {
+  const response = await fetch(
+    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=10`,
     {
       headers: { Authorization: `Bearer ${token}` },
     }
@@ -101,12 +152,19 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const TOKEN_KEY = "spotify_access_token";
 const EXPIRATION_KEY = "spotify_token_expiration";
 
-export const saveToken = async (token: string, expiresIn: number, userId: string) => {
+export const saveToken = async (
+  token: string,
+  expiresIn: number,
+  userId: string
+) => {
   try {
     const expirationTime = new Date().getTime() + expiresIn * 1000;
     // Key theo userId: spotify_token_abc123...
     await AsyncStorage.setItem(`spotify_token_${userId}`, token);
-    await AsyncStorage.setItem(`spotify_expiration_${userId}`, expirationTime.toString());
+    await AsyncStorage.setItem(
+      `spotify_expiration_${userId}`,
+      expirationTime.toString()
+    );
   } catch (e) {
     console.error("Error saving token", e);
   }
@@ -133,11 +191,11 @@ export const getSavedToken = async (userId: string) => {
 };
 
 export const clearToken = async (userId: string) => {
-    await AsyncStorage.multiRemove([
-        `spotify_token_${userId}`, 
-        `spotify_expiration_${userId}`
-    ]);
-}
+  await AsyncStorage.multiRemove([
+    `spotify_token_${userId}`,
+    `spotify_expiration_${userId}`,
+  ]);
+};
 
 export const createPlaylist = async (
   token: string,
@@ -242,7 +300,9 @@ export const removeTrackFromPlaylist = async (
   return await response.json();
 };
 
-export const getPlayableUrl = async (spotifyTrack: any): Promise<string | null> => {
+export const getPlayableUrl = async (
+  spotifyTrack: any
+): Promise<string | null> => {
   // 1. Nếu Spotify có preview, dùng luôn (ưu tiên hàng chính chủ)
   if (spotifyTrack.preview_url) {
     return spotifyTrack.preview_url;
@@ -253,10 +313,12 @@ export const getPlayableUrl = async (spotifyTrack: any): Promise<string | null> 
     const artistName = spotifyTrack.artists?.[0]?.name || "";
     const trackName = spotifyTrack.name || "";
     const query = `${trackName} ${artistName}`;
-    
+
     // Gọi API iTunes (mặc định limit=1 để lấy kết quả đúng nhất)
     const response = await fetch(
-      `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`
+      `https://itunes.apple.com/search?term=${encodeURIComponent(
+        query
+      )}&media=music&entity=song&limit=1`
     );
     const data = await response.json();
 
@@ -268,5 +330,5 @@ export const getPlayableUrl = async (spotifyTrack: any): Promise<string | null> 
   }
 
   // 3. Đường cùng: Trả về null hoặc link cứng dự phòng
-  return "https://cdn.pixabay.com/audio/2022/10/18/audio_31c2730e64.mp3"; 
+  return "https://cdn.pixabay.com/audio/2022/10/18/audio_31c2730e64.mp3";
 };
