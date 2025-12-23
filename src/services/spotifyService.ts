@@ -101,35 +101,43 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const TOKEN_KEY = "spotify_access_token";
 const EXPIRATION_KEY = "spotify_token_expiration";
 
-export const saveToken = async (token: string, expiresIn: number) => {
+export const saveToken = async (token: string, expiresIn: number, userId: string) => {
   try {
     const expirationTime = new Date().getTime() + expiresIn * 1000;
-    await AsyncStorage.setItem(TOKEN_KEY, token);
-    await AsyncStorage.setItem(EXPIRATION_KEY, expirationTime.toString());
+    // Key theo userId: spotify_token_abc123...
+    await AsyncStorage.setItem(`spotify_token_${userId}`, token);
+    await AsyncStorage.setItem(`spotify_expiration_${userId}`, expirationTime.toString());
   } catch (e) {
-    if (__DEV__) console.error("Error saving token", e);
+    console.error("Error saving token", e);
   }
 };
 
-export const getSavedToken = async () => {
+export const getSavedToken = async (userId: string) => {
   try {
-    const token = await AsyncStorage.getItem(TOKEN_KEY);
-    const expirationTime = await AsyncStorage.getItem(EXPIRATION_KEY);
+    const tokenKey = `spotify_token_${userId}`;
+    const expKey = `spotify_expiration_${userId}`;
+
+    const token = await AsyncStorage.getItem(tokenKey);
+    const expirationTime = await AsyncStorage.getItem(expKey);
 
     if (!token || !expirationTime) return null;
 
-    const currentTime = new Date().getTime();
-
-    if (currentTime > parseInt(expirationTime)) {
-      await AsyncStorage.multiRemove([TOKEN_KEY, EXPIRATION_KEY]);
+    if (new Date().getTime() > parseInt(expirationTime)) {
+      await AsyncStorage.multiRemove([tokenKey, expKey]);
       return null;
     }
-
     return token;
   } catch (e) {
     return null;
   }
 };
+
+export const clearToken = async (userId: string) => {
+    await AsyncStorage.multiRemove([
+        `spotify_token_${userId}`, 
+        `spotify_expiration_${userId}`
+    ]);
+}
 
 export const createPlaylist = async (
   token: string,
@@ -232,4 +240,33 @@ export const removeTrackFromPlaylist = async (
     }
   );
   return await response.json();
+};
+
+export const getPlayableUrl = async (spotifyTrack: any): Promise<string | null> => {
+  // 1. Nếu Spotify có preview, dùng luôn (ưu tiên hàng chính chủ)
+  if (spotifyTrack.preview_url) {
+    return spotifyTrack.preview_url;
+  }
+
+  // 2. Nếu không, qua iTunes tìm "ké"
+  try {
+    const artistName = spotifyTrack.artists?.[0]?.name || "";
+    const trackName = spotifyTrack.name || "";
+    const query = `${trackName} ${artistName}`;
+    
+    // Gọi API iTunes (mặc định limit=1 để lấy kết quả đúng nhất)
+    const response = await fetch(
+      `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`
+    );
+    const data = await response.json();
+
+    if (data.resultCount > 0) {
+      return data.results[0].previewUrl; // Link .m4a chất lượng cao
+    }
+  } catch (error) {
+    console.warn("Lỗi tìm nhạc bên iTunes:", error);
+  }
+
+  // 3. Đường cùng: Trả về null hoặc link cứng dự phòng
+  return "https://cdn.pixabay.com/audio/2022/10/18/audio_31c2730e64.mp3"; 
 };

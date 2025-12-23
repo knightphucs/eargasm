@@ -9,6 +9,7 @@ import React, {
 import { Audio } from "expo-av";
 import { db, auth } from "../config/firebaseConfig";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { getPlayableUrl } from "../services/spotifyService";
 
 interface MusicContextType {
   isPlaying: boolean;
@@ -95,7 +96,7 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (__DEV__) console.log("✅ Saved listening history for:", track.name);
-    } catch (error) {
+    } catch (error: any) {
       // Silently fail for Firebase permission errors - don't block playback
       if (__DEV__) {
         if (error.code === "permission-denied") {
@@ -246,12 +247,19 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
         soundRef.current = null;
       }
 
+      const playableUrl = await getPlayableUrl(track);
+      
+      if (!playableUrl) {
+         console.log("❌ No playable URL found");
+         return;
+      }
+
       setCurrentTrack(track);
       setIsPlaying(true);
       playStartTimeRef.current = Date.now();
 
       const { sound } = await Audio.Sound.createAsync(
-        { uri: previewUrl },
+        { uri: playableUrl },
         { shouldPlay: false, volume: 0 }
       );
 
@@ -373,7 +381,7 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
           console.log(
             "🔴 Closing player - status:",
             status.isLoaded,
-            status.isPlaying
+            status.isLoaded ? status.isPlaying : "Not Loaded"
           );
 
         // Stop if playing - with volume fade for clean stop
