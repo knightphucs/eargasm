@@ -14,6 +14,7 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMusic } from "../context/MusicContext";
+import { useTheme } from "../context/ThemeContext";
 import { db, auth } from "../config/firebaseConfig";
 import {
   collection,
@@ -44,6 +45,7 @@ interface ArtistStats {
 
 export default function StatsScreen() {
   const { currentTrack } = useMusic();
+  const { colors, isDark } = useTheme();
   const user = auth.currentUser;
 
   const [loading, setLoading] = useState(true);
@@ -177,7 +179,7 @@ export default function StatsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#1DB954" />
       </View>
     );
@@ -185,13 +187,13 @@ export default function StatsScreen() {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Your Stats</Text>
+        <Text style={[styles.title, { color: colors.text }]}>Your Stats</Text>
         <View style={styles.timeRangeButtons}>
           {(["week", "month", "all-time"] as const).map((range) => (
             <TouchableOpacity
@@ -203,12 +205,14 @@ export default function StatsScreen() {
               activeOpacity={0.7}
               style={[
                 styles.timeButton,
+                { backgroundColor: colors.surface },
                 timeRange === range && styles.timeButtonActive,
               ]}
             >
               <Text
                 style={[
                   styles.timeButtonText,
+                  { color: colors.text },
                   timeRange === range && styles.timeButtonTextActive,
                 ]}
               >
@@ -248,29 +252,48 @@ export default function StatsScreen() {
 
       {/* Top Tracks */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Top Tracks</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Top Tracks
+        </Text>
         {topTracks.length === 0 ? (
-          <Text style={styles.emptyText}>No listening history yet</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            No listening history yet
+          </Text>
         ) : (
           <FlatList
             data={topTracks}
             keyExtractor={(item) => item.id}
             scrollEnabled={false}
             renderItem={({ item, index }) => (
-              <View style={styles.trackItem}>
-                <Text style={styles.rank}>#{index + 1}</Text>
+              <View
+                style={[styles.trackItem, { backgroundColor: colors.surface }]}
+              >
+                <Text style={[styles.rank, { color: colors.textSecondary }]}>
+                  #{index + 1}
+                </Text>
                 <Image
                   source={{ uri: item.album.images[0]?.url || "" }}
                   style={styles.trackImage}
                 />
                 <View style={styles.trackInfo}>
-                  <Text style={styles.trackName} numberOfLines={1}>
+                  <Text
+                    style={[styles.trackName, { color: colors.text }]}
+                    numberOfLines={1}
+                  >
                     {item.name}
                   </Text>
-                  <Text style={styles.trackArtist} numberOfLines={1}>
+                  <Text
+                    style={[
+                      styles.trackArtist,
+                      { color: colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {item.artists[0]?.name}
                   </Text>
-                  <Text style={styles.trackMeta}>
+                  <Text
+                    style={[styles.trackMeta, { color: colors.textSecondary }]}
+                  >
                     {item.playCount} plays • {formatTime(item.totalDuration)}
                   </Text>
                 </View>
@@ -282,9 +305,13 @@ export default function StatsScreen() {
 
       {/* Top Artists */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Top Artists</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Top Artists
+        </Text>
         {getTopArtists().length === 0 ? (
-          <Text style={styles.emptyText}>No artist data yet</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            No artist data yet
+          </Text>
         ) : (
           getTopArtists().map((artist) => (
             <View key={artist.name} style={styles.artistItem}>
@@ -308,10 +335,29 @@ export default function StatsScreen() {
                     </Text>
                   </View>
                 )}
+            <View
+              key={artist.name}
+              style={[styles.artistItem, { backgroundColor: colors.surface }]}
+            >
+              <View
+                style={[
+                  styles.artistAvatar,
+                  {
+                    backgroundColor: `hsl(${Math.random() * 360}, 70%, 60%)`,
+                  },
+                ]}
+              >
+                <Text style={styles.artistInitial}>
+                  {artist.name.charAt(0).toUpperCase()}
+                </Text>
               </View>
               <View style={styles.artistInfo}>
-                <Text style={styles.artistName}>{artist.name}</Text>
-                <Text style={styles.artistMeta}>
+                <Text style={[styles.artistName, { color: colors.text }]}>
+                  {artist.name}
+                </Text>
+                <Text
+                  style={[styles.artistMeta, { color: colors.textSecondary }]}
+                >
                   {artist.playCount} plays • {artist.topTracks.length} tracks
                 </Text>
               </View>

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -13,8 +13,9 @@ import {
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
+import { useMusic } from "../context/MusicContext";
 
-const { width, height } = Dimensions.get("window");
+const { height } = Dimensions.get("window");
 
 interface QueueTrack {
   id: string;
@@ -42,6 +43,65 @@ export const QueueModal = ({
   onRemoveTrack,
 }: QueueModalProps) => {
   const slideAnim = useRef(new Animated.Value(height)).current;
+  const { reorderQueue } = useMusic();
+  const flatListRef = useRef<FlatList>(null);
+
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const queueRef = useRef(queue);
+
+  const [localQueue, setLocalQueue] = useState(queue);
+
+  useEffect(() => {
+    setLocalQueue(queue);
+    queueRef.current = queue;
+  }, [queue]);
+
+  const stopMoving = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const startMoving = (trackId: string, direction: "up" | "down") => {
+    handleMoveByTrackId(trackId, direction);
+
+    timerRef.current = setInterval(() => {
+      handleMoveByTrackId(trackId, direction);
+    }, 120);
+  };
+
+  const handleMoveByTrackId = (trackId: string, direction: "up" | "down") => {
+    const currentQueue = [...queueRef.current];
+    const index = currentQueue.findIndex((t) => t.id === trackId);
+
+    if (index === -1) return;
+
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+    if (targetIndex < 0 || targetIndex >= currentQueue.length) {
+      stopMoving();
+      return;
+    }
+
+    flatListRef.current?.scrollToIndex({
+      index: targetIndex,
+      animated: true,
+      viewPosition: 0.5,
+    });
+
+    [currentQueue[index], currentQueue[targetIndex]] = [
+      currentQueue[targetIndex],
+      currentQueue[index],
+    ];
+
+    queueRef.current = currentQueue;
+
+    setLocalQueue(currentQueue);
+    reorderQueue?.(currentQueue);
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
 
   useEffect(() => {
     if (visible) {
@@ -59,7 +119,7 @@ export const QueueModal = ({
         useNativeDriver: true,
       }).start();
     }
-  }, [visible, slideAnim]);
+  }, [visible]);
 
   const renderQueueItem = ({
     item,
@@ -69,24 +129,26 @@ export const QueueModal = ({
     index: number;
   }) => {
     const isCurrentTrack = item.id === currentTrackId;
+    const currentTrackIndex = queue.findIndex((t) => t.id === currentTrackId);
+    const isPlayed = index < currentTrackIndex;
 
     return (
-      <TouchableOpacity
-        activeOpacity={0.7}
-        style={[styles.queueItem, isCurrentTrack && styles.queueItemActive]}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onTrackSelect(item);
-        }}
+      <View
+        style={[
+          styles.queueItem,
+          isCurrentTrack && styles.queueItemActive,
+          isPlayed && { opacity: 0.5 },
+        ]}
       >
-        {/* Album Art */}
         <Image
           source={{ uri: item.album.images[0]?.url || "" }}
           style={styles.queueItemImage}
         />
 
-        {/* Track Info */}
-        <View style={styles.queueItemInfo}>
+        <TouchableOpacity
+          style={styles.queueItemInfo}
+          onPress={() => onTrackSelect(item)}
+        >
           <Text
             style={[
               styles.queueItemName,
@@ -94,37 +156,46 @@ export const QueueModal = ({
             ]}
             numberOfLines={1}
           >
-            {isCurrentTrack && "▶ "}
             {item.name}
           </Text>
           <Text style={styles.queueItemArtist} numberOfLines={1}>
             {item.artists[0]?.name || "Unknown"}
           </Text>
+        </TouchableOpacity>
+
+        {/* Cụm nút di chuyển bài hát */}
+        <View style={styles.moveControls}>
+          <TouchableOpacity
+            onPressIn={() => startMoving(item.id, "up")}
+            onPressOut={stopMoving}
+            disabled={index === 0}
+            style={[styles.moveBtn, index === 0 && { opacity: 0.1 }]}
+          >
+            <Ionicons name="chevron-up" size={24} color="#1DB954" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPressIn={() => startMoving(item.id, "down")}
+            onPressOut={stopMoving}
+            disabled={index === queue.length - 1}
+            style={[
+              styles.moveBtn,
+              index === queue.length - 1 && { opacity: 0.1 },
+            ]}
+          >
+            <Ionicons name="chevron-down" size={24} color="#1DB954" />
+          </TouchableOpacity>
         </View>
 
-        {/* Index Badge */}
-        <View style={styles.indexBadge}>
-          <Text style={styles.indexText}>{index + 1}</Text>
-        </View>
-
-        {/* Remove Button */}
         <TouchableOpacity
           onPress={() => onRemoveTrack(item.id)}
           style={styles.removeButton}
         >
-          <Ionicons name="close" size={18} color="#ff5252" />
+          <Ionicons name="close-circle" size={22} color="#ff5252" />
         </TouchableOpacity>
-      </TouchableOpacity>
+      </View>
     );
   };
-
-  const emptyListComponent = (
-    <View style={styles.emptyContainer}>
-      <Ionicons name="radio-outline" size={48} color="#666" />
-      <Text style={styles.emptyText}>Queue is empty</Text>
-      <Text style={styles.emptySubtext}>Add tracks to see them here</Text>
-    </View>
-  );
 
   return (
     <Modal
@@ -140,7 +211,6 @@ export const QueueModal = ({
             { transform: [{ translateY: slideAnim }] },
           ]}
         >
-          {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="chevron-down" size={28} color="white" />
@@ -149,19 +219,19 @@ export const QueueModal = ({
             <View style={{ width: 32 }} />
           </View>
 
-          {/* Queue List */}
-          {queue.length === 0 ? (
-            <View style={styles.emptyWrapper}>{emptyListComponent}</View>
-          ) : (
-            <FlatList
-              data={queue}
-              keyExtractor={(item: QueueTrack, index: number) =>
-                `${item.id}-${index}`
-              }
-              renderItem={renderQueueItem}
-              contentContainerStyle={styles.listContent}
-            />
-          )}
+          <FlatList
+            ref={flatListRef}
+            data={localQueue}
+            keyExtractor={(item) => item.id}
+            renderItem={renderQueueItem}
+            contentContainerStyle={styles.listContent}
+            extraData={localQueue}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>Queue is empty</Text>
+              </View>
+            }
+          />
         </Animated.View>
       </View>
     </Modal>
@@ -171,28 +241,24 @@ export const QueueModal = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
     justifyContent: "flex-end",
   },
   modalContent: {
-    height: height * 0.8,
+    height: height * 0.85,
     backgroundColor: "#121212",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
     overflow: "hidden",
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#282828",
   },
-  closeButton: {
-    padding: 8,
-  },
+  closeButton: { padding: 4 },
   title: {
     fontSize: 18,
     fontWeight: "bold",
@@ -200,86 +266,39 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "center",
   },
-  listContainer: {
-    flex: 1,
-  },
-  listContent: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-  },
-  emptyWrapper: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#888",
-    marginTop: 12,
-  },
-  emptySubtext: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 4,
-  },
+  listContent: { paddingBottom: 40 },
   queueItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    padding: 12,
+    marginHorizontal: 12,
     marginVertical: 4,
-    marginHorizontal: 8,
     backgroundColor: "#1E1E1E",
     borderRadius: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: "transparent",
   },
   queueItemActive: {
-    backgroundColor: "#1DB954",
-    borderLeftColor: "#1DB954",
-  },
-  queueItemImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 4,
-    marginRight: 12,
-  },
-  queueItemInfo: {
-    flex: 1,
-  },
-  queueItemName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "white",
-  },
-  queueItemNameActive: {
-    color: "white",
-    fontWeight: "700",
-  },
-  queueItemArtist: {
-    fontSize: 12,
-    color: "#b3b3b3",
-    marginTop: 2,
-  },
-  indexBadge: {
     backgroundColor: "#282828",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#1DB954",
   },
-  indexText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#1DB954",
+  queueItemImage: { width: 45, height: 45, borderRadius: 4, marginRight: 12 },
+  queueItemInfo: { flex: 1 },
+  queueItemName: { fontSize: 14, fontWeight: "600", color: "white" },
+  queueItemNameActive: { color: "#1DB954" },
+  queueItemArtist: { fontSize: 12, color: "#b3b3b3", marginTop: 2 },
+  moveControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#282828",
+    borderRadius: 8,
+    marginRight: 10,
+    overflow: "hidden",
   },
-  removeButton: {
-    padding: 8,
+  moveBtn: {
+    padding: 10,
+    paddingHorizontal: 12,
   },
+  removeButton: { padding: 4 },
+  emptyContainer: { alignItems: "center", marginTop: 100 },
+  emptyText: { color: "#666", fontSize: 16 },
 });

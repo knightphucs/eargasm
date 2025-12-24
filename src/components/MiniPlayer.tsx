@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Animated,
@@ -23,21 +22,19 @@ const SCREEN_HEIGHT = Dimensions.get("window").height;
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const SWIPE_THRESHOLD = 50;
 
-// Gradient color themes
 const GRADIENT_THEMES = [
-  ["#1DB954", "#1ed760"], // Spotify Green
-  ["#E91E63", "#F48FB1"], // Pink
-  ["#9C27B0", "#BA68C8"], // Purple
-  ["#3F51B5", "#7986CB"], // Indigo
-  ["#2196F3", "#64B5F6"], // Blue
-  ["#00BCD4", "#4DD0E1"], // Cyan
-  ["#009688", "#4DB6AC"], // Teal
-  ["#FF5722", "#FF8A65"], // Deep Orange
-  ["#FF9800", "#FFB74D"], // Orange
-  ["#FFC107", "#FFD54F"], // Amber
+  ["#1DB954", "#1ed760"],
+  ["#E91E63", "#F48FB1"],
+  ["#9C27B0", "#BA68C8"],
+  ["#3F51B5", "#7986CB"],
+  ["#2196F3", "#64B5F6"],
+  ["#00BCD4", "#4DD0E1"],
+  ["#009688", "#4DB6AC"],
+  ["#FF5722", "#FF8A65"],
+  ["#FF9800", "#FFB74D"],
+  ["#FFC107", "#FFD54F"],
 ];
 
-// Hash function to pick gradient based on track ID
 const getGradientForTrack = (trackId?: string): string[] => {
   if (!trackId) return GRADIENT_THEMES[0];
   let hash = 0;
@@ -71,22 +68,12 @@ export default function MiniPlayer() {
   );
 
   const progress = duration > 0 ? Math.min(position / duration, 1) : 0;
-
-  // Animation xuất hiện
   const entranceAnim = useRef(new Animated.Value(150)).current;
-
-  // Animation di chuyển (Pan)
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-
-  // Animation Scale (Hiệu ứng phồng lên khi chạm)
   const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  // Double tap for like
   const lastTap = useRef<number>(0);
-
   const isPlayerVisible = useRef(false);
 
-  // Kết hợp Scale
   const animatedScale = Animated.multiply(
     scaleAnim,
     pan.y.interpolate({
@@ -114,13 +101,11 @@ export default function MiniPlayer() {
         return horizontalSwipe || verticalSwipe;
       },
       onMoveShouldSetPanResponderCapture: (_, gestureState) => {
-        // Capture horizontal swipes immediately
         return (
           Math.abs(gestureState.dx) > 20 &&
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2
         );
       },
-
       onPanResponderGrant: () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         Animated.spring(scaleAnim, {
@@ -129,15 +114,9 @@ export default function MiniPlayer() {
           tension: 120,
           useNativeDriver: true,
         }).start();
-
-        pan.setOffset({
-          x: (pan.x as any)._value,
-          y: (pan.y as any)._value,
-        });
+        pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
       },
-
       onPanResponderMove: (_, gestureState) => {
-        // Ưu tiên horizontal swipe cho next/previous track
         if (
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy) &&
           Math.abs(gestureState.dx) > 20
@@ -149,48 +128,37 @@ export default function MiniPlayer() {
           pan.setValue({ x: 0, y: newY });
         }
       },
-
       onPanResponderRelease: (_, gestureState) => {
         pan.flattenOffset();
         const { dx, dy, vy } = gestureState;
 
-        if (__DEV__) {
-          console.log("🎯 Swipe detected - dx:", dx, "dy:", dy);
-          console.log("🎯 Thresholds - SWIPE:", SWIPE_THRESHOLD, "min dx:", 40);
-        }
-
-        // Vuốt ngang (ưu tiên cao hơn)
         if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-          if (__DEV__) console.log("✅ Horizontal swipe confirmed");
-
           if (dx < -SWIPE_THRESHOLD) {
-            // Swipe left (vuốt từ phải qua trái) = previous track
-            if (__DEV__) console.log("👈 Swipe left: Previous track");
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             playPrevious();
-            setTimeout(() => {
-              Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Success
-              );
-            }, 200);
+            setTimeout(
+              () =>
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success
+                ),
+              200
+            );
             resetPosition();
           } else if (dx > SWIPE_THRESHOLD) {
-            // Swipe right (vuốt từ trái qua phải) = next track
-            if (__DEV__) console.log("👉 Swipe right: Next track");
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             playNext();
-            setTimeout(() => {
-              Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Success
-              );
-            }, 200);
+            setTimeout(
+              () =>
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success
+                ),
+              200
+            );
             resetPosition();
           } else {
             resetPosition();
           }
-        }
-        // Vuốt dọc hoặc Tap
-        else {
+        } else {
           const isTap = Math.abs(dx) < 5 && Math.abs(dy) < 5;
           const isSwipeUp = dy < -SWIPE_THRESHOLD || (dy < -30 && vy < -0.5);
 
@@ -257,29 +225,18 @@ export default function MiniPlayer() {
     }
   }, [currentTrack]);
 
-  // Update gradient colors when track changes
   useEffect(() => {
     if (currentTrack?.id) {
-      const newColors = getGradientForTrack(currentTrack.id);
-      setGradientColors(newColors);
+      setGradientColors(getGradientForTrack(currentTrack.id));
     }
   }, [currentTrack?.id]);
 
-  // Check if track is liked
   useEffect(() => {
     const checkLikedStatus = async () => {
-      if (!currentTrack) {
+      if (!currentTrack || !auth.currentUser) {
         setIsLiked(false);
         return;
       }
-
-      if (!auth.currentUser) {
-        if (__DEV__)
-          console.log("⚠️ Cannot check liked status: user not authenticated");
-        setIsLiked(false);
-        return;
-      }
-
       try {
         const likedRef = doc(
           db,
@@ -290,17 +247,7 @@ export default function MiniPlayer() {
         );
         const likedDoc = await getDoc(likedRef);
         setIsLiked(likedDoc.exists());
-      } catch (error: any) {
-        // Silently handle Firebase permission errors
-        if (__DEV__) {
-          if (error?.code === "permission-denied") {
-            console.log(
-              "⚠️ Firebase permissions issue - liked check failed (non-critical)"
-            );
-          } else {
-            console.error("Error checking liked status:", error);
-          }
-        }
+      } catch (error) {
         setIsLiked(false);
       }
     };
@@ -310,17 +257,12 @@ export default function MiniPlayer() {
   const handleDoubleTapImage = async () => {
     const now = Date.now();
     const DOUBLE_TAP_DELAY = 300;
-
     if (now - lastTap.current < DOUBLE_TAP_DELAY) {
-      // Double tap detected!
       lastTap.current = 0;
-
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
       try {
         const user = auth.currentUser;
         if (!user || !currentTrack) return;
-
         const likedRef = doc(
           db,
           "users",
@@ -328,7 +270,6 @@ export default function MiniPlayer() {
           "liked_songs",
           currentTrack.id
         );
-
         if (isLiked) {
           await deleteDoc(likedRef);
           setIsLiked(false);
@@ -346,7 +287,6 @@ export default function MiniPlayer() {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
       } catch (error) {
-        if (__DEV__) console.error("Error toggling like:", error);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     } else {
@@ -374,9 +314,13 @@ export default function MiniPlayer() {
         ]}
       >
         <LinearGradient
-          colors={[gradientColors[0], gradientColors[1], "#1a1a1a"]}
+          colors={[
+            `${gradientColors[0]}CC`,
+            `${gradientColors[1]}99`,
+            "#121212",
+          ]}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={styles.gradientOverlay}
         />
 
@@ -397,10 +341,9 @@ export default function MiniPlayer() {
               contentFit="cover"
               cachePolicy="memory-disk"
             />
-            {/* Liked Indicator */}
             {isLiked && (
               <View style={styles.miniLikedIndicator}>
-                <Ionicons name="heart" size={12} color="#E91E63" />
+                <Ionicons name="heart" size={10} color="#000" />
               </View>
             )}
           </TouchableOpacity>
@@ -429,12 +372,12 @@ export default function MiniPlayer() {
             <TouchableOpacity
               onPress={() => playTrack(currentTrack, queue)}
               style={styles.playBtn}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
             >
               <Ionicons
                 name={isPlaying ? "pause" : "play"}
-                size={28}
-                color="white"
+                size={22}
+                color="#fff"
               />
             </TouchableOpacity>
 
@@ -499,98 +442,113 @@ export default function MiniPlayer() {
   );
 }
 
-// FULL STYLES ĐỂ KHÔNG BỊ LỖI
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    bottom: 60,
-    left: 0,
-    right: 0,
+    bottom: 70,
+    left: 12,
+    right: 12,
+    borderRadius: 14,
     overflow: "hidden",
     zIndex: 9999,
-    elevation: 10,
+
+    backgroundColor: "#181818",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.6,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 12,
   },
+
   gradientOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    opacity: 0.9,
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.85,
   },
+
   content: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    height: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    height: 70,
     gap: 12,
   },
+
   img: {
-    width: 48,
-    height: 48,
-    borderRadius: 4,
+    width: 52,
+    height: 52,
+    borderRadius: 10,
     backgroundColor: "#333",
   },
+
   info: {
     flex: 1,
     justifyContent: "center",
   },
+
   title: {
     color: "#FFFFFF",
-    fontSize: 13.5,
-    fontWeight: "400",
-    marginBottom: 4,
+    fontSize: 14.5,
+    fontWeight: "600",
+    marginBottom: 2,
   },
+
   artist: {
     color: "#B3B3B3",
-    fontSize: 12,
-    fontWeight: "400",
+    fontSize: 12.5,
   },
+
   controls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
   },
+
   controlBtn: {
     padding: 6,
+    opacity: 0.85,
   },
+
   playBtn: {
-    padding: 4,
-    marginHorizontal: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    marginHorizontal: 6,
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
+
   closeBtn: {
     padding: 6,
     marginLeft: 4,
+    opacity: 0.6,
   },
+
   progressContainer: {
     width: "100%",
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 10,
   },
+
   progressBackground: {
-    height: 2,
+    height: 1.5,
     width: "100%",
-    backgroundColor: "#404040",
-    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
+
   progressFill: {
     height: "100%",
-    backgroundColor: "#B3B3B3",
+    backgroundColor: "#1DB954",
   },
+
   miniLikedIndicator: {
     position: "absolute",
-    bottom: 2,
-    right: 2,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    bottom: -4,
+    right: -4,
+    backgroundColor: "#1DB954",
     borderRadius: 10,
-    padding: 3,
+    padding: 4,
   },
 });

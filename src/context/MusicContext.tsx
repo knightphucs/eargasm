@@ -26,9 +26,11 @@ interface MusicContextType {
   seekTo: (value: number) => Promise<void>;
   playNext: () => Promise<void>;
   playPrevious: () => Promise<void>;
+  insertNext: (track: any) => void;
   addToQueue: (track: any) => void;
   removeFromQueue: (trackId: string) => void;
   queue: any[];
+  reorderQueue?: (newQueue: any[]) => void;
 }
 
 const MusicContext = createContext<MusicContextType | undefined>(undefined);
@@ -110,35 +112,33 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const insertNext = useCallback((trackToAdd: any) => {
+    const currentQueue = [...queueRef.current];
+    const currentIdx = currentIndexRef.current;
+
+    if (currentIdx !== -1) {
+      currentQueue.splice(currentIdx + 1, 0, trackToAdd);
+    } else {
+      currentQueue.unshift(trackToAdd);
+      currentIndexRef.current = 0;
+      setCurrentIndex(0);
+    }
+
+    // Cập nhật cả Ref và State
+    queueRef.current = currentQueue;
+    setQueue(currentQueue);
+
+    if (__DEV__) console.log("➕ Inserted next:", trackToAdd.name);
+  }, []);
+
   const playNext = async () => {
     const currentQueue = queueRef.current;
     const currentIdx = currentIndexRef.current;
 
-    if (__DEV__) {
-      console.log(
-        "🔍 playNext called - queue length:",
-        currentQueue.length,
-        "currentIndex:",
-        currentIdx
-      );
-      console.log(
-        "🔍 Queue preview:",
-        currentQueue.map((t) => t.name).slice(0, 3)
-      );
-    }
+    if (currentQueue.length === 0) return;
 
-    if (currentQueue.length === 0) {
-      if (__DEV__) console.log("❌ playNext: queue is empty");
-      return;
-    }
     const nextIndex = (currentIdx + 1) % currentQueue.length;
-    if (__DEV__)
-      console.log(
-        "✅ playNext: moving to index",
-        nextIndex,
-        "/",
-        currentQueue.length
-      );
+
     await playTrack(currentQueue[nextIndex], currentQueue);
   };
 
@@ -248,10 +248,10 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const playableUrl = await getPlayableUrl(track);
-      
+
       if (!playableUrl) {
-         console.log("❌ No playable URL found");
-         return;
+        console.log("❌ No playable URL found");
+        return;
       }
 
       setCurrentTrack(track);
@@ -413,14 +413,37 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
     setIsPlaying(false);
   };
 
-  const addToQueue = (track: any) => {
-    if (__DEV__) console.log("➕ Adding to queue:", track.name);
-    setQueue((prevQueue) => {
-      const newQueue = [...prevQueue, track];
-      if (__DEV__) console.log("✅ Queue now has", newQueue.length, "tracks");
-      return newQueue;
-    });
-  };
+  const addToQueue = useCallback((trackToAdd: any) => {
+    // Lấy queue hiện tại
+    const currentQueue = [...queueRef.current];
+
+    // Đẩy vào cuối mảng
+    currentQueue.push(trackToAdd);
+
+    // Cập nhật cả Ref và State
+    queueRef.current = currentQueue;
+    setQueue(currentQueue);
+
+    if (__DEV__) console.log("➕ Added to end of queue:", trackToAdd.name);
+  }, []);
+
+  const reorderQueue = useCallback(
+    (newQueue: any[]) => {
+      queueRef.current = newQueue;
+      setQueue(newQueue);
+
+      if (currentTrack) {
+        const newIndex = newQueue.findIndex((t) => t.id === currentTrack.id);
+        if (newIndex !== -1) {
+          currentIndexRef.current = newIndex;
+          setCurrentIndex(newIndex);
+        }
+      }
+
+      if (__DEV__) console.log("🔄 Queue reordered");
+    },
+    [currentTrack]
+  );
 
   const removeFromQueue = (trackId: string) => {
     if (__DEV__) console.log("➖ Removing from queue:", trackId);
@@ -451,6 +474,7 @@ export const MusicProvider = ({ children }: { children: ReactNode }) => {
         duration,
         seekTo,
         playNext,
+        insertNext,
         playPrevious,
         addToQueue,
         removeFromQueue,

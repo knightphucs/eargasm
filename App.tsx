@@ -1,48 +1,63 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { View, ActivityIndicator, StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import LoginScreen from "./src/screens/LoginScreen";
 import AppNavigator from "./src/navigation/AppNavigator";
+import SplashScreen from "./src/components/SplashScreen";
 import { SpotifyAuthProvider } from "./src/context/SpotifyAuthContext";
 import { UserProvider, useUser } from "./src/context/UserContext";
-import { ThemeProvider } from "./src/context/ThemeContext";
+import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 function Root() {
   const { firebaseUser, loading } = useUser();
+  const { colors, isDark } = useTheme();
+  const [showSplash, setShowSplash] = useState(true);
 
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          backgroundColor: "#121212",
-        }}
-      >
-        <ActivityIndicator size="large" color="#1DB954" />
-      </View>
-    );
+  useEffect(() => {
+    // Đảm bảo splash screen hiển thị ít nhất 2.5s
+    const timer = setTimeout(() => {
+      if (!loading) {
+        setShowSplash(false);
+      }
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  // Show splash screen first
+  if (showSplash || loading) {
+    return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
 
-  return firebaseUser ? (
-    <SpotifyAuthProvider>
-      <AppNavigator />
-    </SpotifyAuthProvider>
-  ) : (
-    <LoginScreen />
+  return (
+    <>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={colors.background}
+      />
+      {firebaseUser ? (
+        <SpotifyAuthProvider>
+          <AppNavigator />
+        </SpotifyAuthProvider>
+      ) : (
+        <LoginScreen />
+      )}
+    </>
   );
 }
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <UserProvider>
-        <SafeAreaProvider>
-          <StatusBar barStyle="light-content" backgroundColor="#121212" />
-          <Root />
-        </SafeAreaProvider>
-      </UserProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <UserProvider>
+          <SafeAreaProvider>
+            <Root />
+          </SafeAreaProvider>
+        </UserProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

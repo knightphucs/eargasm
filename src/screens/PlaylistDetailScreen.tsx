@@ -39,6 +39,7 @@ import { doc, updateDoc, deleteDoc, setDoc,getDoc, increment,
   collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db, auth } from "../config/firebaseConfig";
 import { useMusic } from "../context/MusicContext";
+import { useTheme } from "../context/ThemeContext";
 
 const { width } = Dimensions.get("window");
 // Debounce Utility
@@ -81,6 +82,7 @@ export default function PlaylistDetailScreen() {
   const [selectedTrackForOptions, setSelectedTrackForOptions] = useState<any>(null);
 
   const { playTrack, currentTrack, isPlaying } = useMusic();
+  const { colors, isDark } = useTheme();
   const rowRefs = useRef(new Map());
 
   useEffect(() => {
@@ -564,7 +566,9 @@ export default function PlaylistDetailScreen() {
   );
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#000" }}>
+    <GestureHandlerRootView
+      style={{ flex: 1, backgroundColor: colors.background }}
+    >
       <Image
         source={{
           uri:
@@ -577,7 +581,11 @@ export default function PlaylistDetailScreen() {
       <View
         style={[
           StyleSheet.absoluteFillObject,
-          { backgroundColor: "rgba(0,0,0,0.6)" },
+          {
+            backgroundColor: isDark
+              ? "rgba(0,0,0,0.6)"
+              : "rgba(255,255,255,0.6)",
+          },
         ]}
       />
 
@@ -595,14 +603,16 @@ export default function PlaylistDetailScreen() {
                 onPress={() => navigation.goBack()}
                 style={styles.backBtn}
               >
-                <Ionicons name="chevron-back" size={30} color="white" />
-                <Text style={styles.backText}>Thư viện</Text>
+                <Ionicons name="chevron-back" size={30} color={colors.text} />
+                <Text style={[styles.backText, { color: colors.text }]}>
+                  Thư viện
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity>
                 <Ionicons
                   name="ellipsis-horizontal-circle"
                   size={30}
-                  color="white"
+                  color={colors.text}
                 />
               </TouchableOpacity>
             </View>
@@ -633,7 +643,9 @@ export default function PlaylistDetailScreen() {
                     activeOpacity={0.7}
                   >
                     <Ionicons name="add" size={24} color="#E91E63" />
-                    <Text style={styles.addText}>Thêm nhạc</Text>
+                    <Text style={[styles.addText, { color: colors.text }]}>
+                      Thêm nhạc
+                    </Text>
                   </TouchableOpacity>
                 }
                 renderItem={({ item, index }) => {
@@ -663,6 +675,7 @@ export default function PlaylistDetailScreen() {
                         <TouchableOpacity
                           style={[
                             styles.rowCard,
+                            { backgroundColor: colors.surface },
                             active && {
                               borderColor: "#E91E63",
                               borderWidth: 1,
@@ -682,7 +695,7 @@ export default function PlaylistDetailScreen() {
                         >
                           <Text
                             style={{
-                              color: "#888",
+                              color: colors.textSecondary,
                               marginRight: 10,
                               width: 20,
                               textAlign: "center",
@@ -698,13 +711,20 @@ export default function PlaylistDetailScreen() {
                             <Text
                               style={[
                                 styles.tName,
+                                { color: colors.text },
                                 active && { color: "#E91E63" },
                               ]}
                               numberOfLines={1}
                             >
                               {track.name}
                             </Text>
-                            <Text style={styles.tArtist} numberOfLines={1}>
+                            <Text
+                              style={[
+                                styles.tArtist,
+                                { color: colors.textSecondary },
+                              ]}
+                              numberOfLines={1}
+                            >
                               {track.artists[0].name}
                             </Text>
                           </View>
@@ -716,7 +736,7 @@ export default function PlaylistDetailScreen() {
                             <Ionicons
                               name="ellipsis-vertical"
                               size={20}
-                              color="#bbb"
+                              color={colors.textSecondary}
                             />
                           </TouchableOpacity>
                         </TouchableOpacity>

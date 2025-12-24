@@ -13,6 +13,7 @@ import {
   Animated,
   Easing,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -31,15 +32,21 @@ import { db, auth } from "../config/firebaseConfig";
 import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 
 import { useMusic } from "../context/MusicContext";
+import { useTheme } from "../context/ThemeContext";
 import { NowPlayingIndicator } from "../components/NowPlayingIndicator";
+import EmptyState from "../components/EmptyState";
+import { ShimmerEffect } from "../components/VisualEffects";
 
 export default function SearchScreen() {
+  const navigation = useNavigation<any>();
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState<any[]>([]);
   const [artists, setArtists] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const { playTrack, currentTrack, isPlaying, addToQueue } = useMusic();
+  const { playTrack, currentTrack, isPlaying, addToQueue, insertNext } =
+    useMusic();
+  const { colors, isDark } = useTheme();
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -146,6 +153,18 @@ export default function SearchScreen() {
     Alert.alert("Added", "Added to playback queue");
   };
 
+  const openRowId = useRef<string | null>(null);
+
+  const onSwipeableWillOpen = (currentId: string) => {
+    if (openRowId.current && openRowId.current !== currentId) {
+      const prevRow = rowRefs.current.get(openRowId.current);
+      if (prevRow) {
+        prevRow.close();
+      }
+    }
+    openRowId.current = currentId;
+  };
+
   const handleOpenPlaylistModal = async (track: any) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const ref = rowRefs.current.get(track.id);
@@ -218,39 +237,64 @@ export default function SearchScreen() {
   };
 
   const renderRightActions = (progress: any, dragX: any, track: any) => {
-    const trans = dragX.interpolate({
-      inputRange: [-140, 0],
-      outputRange: [0, 140],
+    const scale = dragX.interpolate({
+      inputRange: [-160, -80, 0],
+      outputRange: [1, 0.8, 0],
       extrapolate: "clamp",
     });
+
+    const opacity = dragX.interpolate({
+      inputRange: [-160, -100, 0],
+      outputRange: [1, 1, 0],
+      extrapolate: "clamp",
+    });
+
     const isAdded = addedTrackIds.has(track.id);
+
     return (
-      <View style={{ width: 140, flexDirection: "row" }}>
-        <Animated.View style={{ flex: 1, transform: [{ translateX: trans }] }}>
+      <View style={styles.rightActionsContainer}>
+        {/* --- Nút PLAY NEXT --- */}
+        <Animated.View style={{ opacity, transform: [{ scale }] }}>
           <TouchableOpacity
-            style={[styles.rectBtn, { backgroundColor: "#FF8C00" }]}
-            onPress={() => handleAddToQueue(track.uri, track.id)}
+            style={[styles.actionBtn, { backgroundColor: "#E91E63" }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+              insertNext(track);
+
+              const ref = rowRefs.current.get(track.id);
+              if (ref) ref.close();
+
+              Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success
+              );
+              Alert.alert("Đã thêm", "Sẽ phát ngay sau bài hiện tại.");
+            }}
+            activeOpacity={0.8}
           >
-            <Ionicons name="list" size={24} color="white" />
-            <Text style={styles.rectBtnText}>Queue</Text>
+            <Ionicons name="return-down-forward" size={26} color="white" />
+            <Text style={styles.actionText}>Play Next</Text>
           </TouchableOpacity>
         </Animated.View>
-        <Animated.View style={{ flex: 1, transform: [{ translateX: trans }] }}>
+
+        {/* --- Nút ADD --- */}
+        <Animated.View style={{ opacity, transform: [{ scale }] }}>
           <TouchableOpacity
             style={[
-              styles.rectBtn,
-              { backgroundColor: isAdded ? "#555" : "#1DB954" },
+              styles.actionBtn,
+              { backgroundColor: isAdded ? "#404040" : "#1DB954" }, // Xám nếu đã add, Xanh nếu chưa
             ]}
             onPress={() => !isAdded && handleOpenPlaylistModal(track)}
             disabled={isAdded}
+            activeOpacity={0.8}
           >
-            {isAdded ? (
-              <Ionicons name="checkmark-circle" size={28} color="#aaa" />
-            ) : (
-              <Ionicons name="add" size={28} color="white" />
-            )}
-            <Text style={[styles.rectBtnText, isAdded && { color: "#aaa" }]}>
-              {isAdded ? "Added" : "Add"}
+            <Ionicons
+              name={isAdded ? "checkmark-circle" : "heart-circle-outline"}
+              size={26}
+              color={isAdded ? "#AAA" : "white"}
+            />
+            <Text style={[styles.actionText, isAdded && { color: "#AAA" }]}>
+              {isAdded ? "Saved" : "Save"}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -262,41 +306,60 @@ export default function SearchScreen() {
     if (artists.length === 0) return null;
     return (
       <View style={{ marginBottom: 20 }}>
-        <Text style={styles.sectionTitle}>Artists</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Artists
+        </Text>
         <FlatList
           horizontal
           data={artists}
           showsHorizontalScrollIndicator={false}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <View style={styles.artistItem}>
+            <TouchableOpacity
+              style={styles.artistItem}
+              onPress={() =>
+                navigation.navigate("ArtistDetails", { artistId: item.id })
+              }
+            >
               <Image
                 source={{
                   uri: item.images[0]?.url || "https://via.placeholder.com/100",
                 }}
                 style={styles.artistImg}
               />
-              <Text style={styles.artistName} numberOfLines={1}>
+              <Text
+                style={[styles.artistName, { color: colors.text }]}
+                numberOfLines={1}
+              >
                 {item.name}
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
         />
-        {tracks.length > 0 && <Text style={styles.sectionTitle}>Songs</Text>}
+        {tracks.length > 0 && (
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Songs
+          </Text>
+        )}
       </View>
     );
   };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Search</Text>
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={24} color="#555" />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Search</Text>
+        <View
+          style={[
+            styles.searchBox,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <Ionicons name="search" size={24} color={colors.textSecondary} />
           <TextInput
-            style={styles.input}
+            style={[styles.input, { color: colors.text }]}
             placeholder="Songs, artists..."
-            placeholderTextColor="#777"
+            placeholderTextColor={colors.textSecondary}
             value={query}
             onChangeText={setQuery}
             autoCapitalize="none"
@@ -320,7 +383,22 @@ export default function SearchScreen() {
           data={tracks}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={renderHeader}
-          contentContainerStyle={{ paddingBottom: 150 }}
+          ListEmptyComponent={
+            !loading && query.trim() !== "" ? (
+              <EmptyState
+                icon="search-outline"
+                title="No results found"
+                message={`We couldn't find anything for "${query}". Try different keywords.`}
+              />
+            ) : query.trim() === "" ? (
+              <EmptyState
+                icon="musical-notes-outline"
+                title="Search Music"
+                message="Find your favorite songs, albums, and artists"
+              />
+            ) : null
+          }
+          contentContainerStyle={{ paddingBottom: 150, flexGrow: 1 }}
           extraData={addedTrackIds}
           renderItem={({ item }) => {
             const isTrackPlaying = currentTrack?.id === item.id && isPlaying;
@@ -332,13 +410,25 @@ export default function SearchScreen() {
                 }}
                 renderRightActions={(p, d) => renderRightActions(p, d, item)}
                 overshootRight={false}
+                friction={1}
+                rightThreshold={40}
+                onSwipeableWillOpen={() => onSwipeableWillOpen(item.id)}
               >
                 <TouchableOpacity
                   style={[
                     styles.trackItem,
-                    isTrackPlaying && { backgroundColor: "#333" },
+                    { backgroundColor: colors.surface },
+                    isTrackPlaying && {
+                      backgroundColor: isDark ? "#333" : "#e0e0e0",
+                    },
                   ]}
                   onPress={() => {
+                    if (openRowId.current) {
+                      const prevRow = rowRefs.current.get(openRowId.current);
+                      prevRow?.close();
+                      openRowId.current = null;
+                    }
+
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     playTrack(item);
                   }}
@@ -352,13 +442,17 @@ export default function SearchScreen() {
                     <Text
                       style={[
                         styles.trackName,
+                        { color: colors.text },
                         isTrackPlaying && { color: "#1DB954" },
                       ]}
                       numberOfLines={1}
                     >
                       {item.name}
                     </Text>
-                    <Text style={styles.sub} numberOfLines={1}>
+                    <Text
+                      style={[styles.sub, { color: colors.textSecondary }]}
+                      numberOfLines={1}
+                    >
                       {item.artists[0].name}
                     </Text>
                   </View>
@@ -366,7 +460,11 @@ export default function SearchScreen() {
                     <NowPlayingIndicator isPlaying={isPlaying} />
                   )}
                   {!isTrackPlaying && (
-                    <Ionicons name="play" size={20} color="#444" />
+                    <Ionicons
+                      name="play"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
                   )}
                 </TouchableOpacity>
               </Swipeable>
@@ -382,8 +480,12 @@ export default function SearchScreen() {
           onRequestClose={() => setModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalView}>
-              <Text style={styles.modalTitle}>Add to Playlist</Text>
+            <View
+              style={[styles.modalView, { backgroundColor: colors.surface }]}
+            >
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                Add to Playlist
+              </Text>
               {adding ? (
                 <ActivityIndicator
                   size="large"
@@ -391,7 +493,7 @@ export default function SearchScreen() {
                   style={{ margin: 20 }}
                 />
               ) : myPlaylists.length === 0 ? (
-                <Text style={{ color: "gray", margin: 20 }}>
+                <Text style={{ color: colors.textSecondary, margin: 20 }}>
                   You don't have any playlists.
                 </Text>
               ) : (
@@ -405,9 +507,10 @@ export default function SearchScreen() {
                       <TouchableOpacity
                         style={[
                           styles.playlistOption,
+                          { backgroundColor: colors.background },
                           hasSong && {
                             opacity: 0.5,
-                            backgroundColor: "#2a2a2a",
+                            backgroundColor: isDark ? "#2a2a2a" : "#d0d0d0",
                           },
                         ]}
                         onPress={() =>
@@ -423,7 +526,8 @@ export default function SearchScreen() {
                           <Text
                             style={[
                               styles.playlistName,
-                              hasSong && { color: "#888" },
+                              { color: colors.text },
+                              hasSong && { color: colors.textSecondary },
                             ]}
                             numberOfLines={1}
                           >
@@ -450,7 +554,7 @@ export default function SearchScreen() {
                 style={styles.closeBtn}
                 onPress={() => !adding && setModalVisible(false)}
               >
-                <Text style={{ color: "white", fontWeight: "bold" }}>
+                <Text style={{ color: colors.text, fontWeight: "bold" }}>
                   Close
                 </Text>
               </TouchableOpacity>
@@ -517,6 +621,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
     marginTop: 2,
+  },
+  rightActionsContainer: {
+    width: 160,
+    flexDirection: "row",
+    height: "100%",
+  },
+  actionBtn: {
+    width: 80,
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  actionText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 4,
+    letterSpacing: 0.5,
   },
   modalOverlay: {
     flex: 1,
