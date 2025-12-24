@@ -301,5 +301,6 @@ export default function LibraryScreen() {
     </GestureHandlerRootView>
   );
 }
+}
 
 // ✅ FIX: ĐÃ XÓA KHỐI 'const styles = ...' Ở ĐÂY ĐỂ TRÁNH LỖI XUNG ĐỘT

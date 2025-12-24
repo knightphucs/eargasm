@@ -23,10 +23,11 @@ interface SleepTimerProps {
 }
 
 const PRESETS = [
-  { label: "15 phút", minutes: 15 },
-  { label: "30 phút", minutes: 30 },
-  { label: "45 phút", minutes: 45 },
-  { label: "60 phút", minutes: 60 },
+  { label: "5 minutes", minutes: 5 },
+  { label: "15 minutes", minutes: 15 },
+  { label: "30 minutes", minutes: 30 },
+  { label: "45 minutes", minutes: 45 },
+  { label: "1 hour", minutes: 60 },
 ];
 
 export const SleepTimer = ({
