@@ -39,6 +39,7 @@ interface ArtistStats {
   name: string;
   playCount: number;
   topTracks: string[];
+  imageUrl?: string;
 }
 
 export default function StatsScreen() {
@@ -120,11 +121,13 @@ export default function StatsScreen() {
 
         // Artist stats
         const artistName = track.artists?.[0]?.name || "Unknown Artist";
+        const artistImage = track.album?.images?.[0]?.url;
         if (!artistMap.has(artistName)) {
           artistMap.set(artistName, {
             name: artistName,
             playCount: 0,
             topTracks: [],
+            imageUrl: artistImage,
           });
         }
 
@@ -285,17 +288,26 @@ export default function StatsScreen() {
         ) : (
           getTopArtists().map((artist) => (
             <View key={artist.name} style={styles.artistItem}>
-              <View
-                style={[
-                  styles.artistAvatar,
-                  {
-                    backgroundColor: `hsl(${Math.random() * 360}, 70%, 60%)`,
-                  },
-                ]}
-              >
-                <Text style={styles.artistInitial}>
-                  {artist.name.charAt(0).toUpperCase()}
-                </Text>
+              <View style={[styles.artistAvatar, { overflow: 'hidden' }]}> 
+                {artist.imageUrl ? (
+                  <Image 
+                    source={{ uri: artist.imageUrl }} 
+                    style={{ width: '100%', height: '100%' }} 
+                  />
+                ) : (
+                  // Fallback: Nếu không có ảnh thì hiện chữ cái đầu như cũ
+                  <View style={{ 
+                      flex: 1, 
+                      width: '100%',
+                      backgroundColor: `hsl(${Math.random() * 360}, 70%, 60%)`,
+                      alignItems: 'center', 
+                      justifyContent: 'center' 
+                  }}>
+                    <Text style={styles.artistInitial}>
+                      {artist.name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
               </View>
               <View style={styles.artistInfo}>
                 <Text style={styles.artistName}>{artist.name}</Text>
